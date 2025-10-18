@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  choch-alert:
+    build: .
+    container_name: choch-alert-backend
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
