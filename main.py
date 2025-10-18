@@ -481,21 +481,31 @@ class ChochAlertSystem:
             # Calculate loop duration
             loop_duration = asyncio.get_event_loop().time() - loop_start
             
-            # Get minimum wait time among all timeframes
+            # Get minimum wait time among all timeframes (this is the interval, e.g., 300s for 5m)
             min_wait_time = min([self.scheduler.get_wait_time(tf) for tf in config.TIMEFRAMES])
+            
+            # Calculate actual wait time: interval - duration already spent
+            # Example: 300s interval - 165.1s duration = 134.9s to wait
+            min_interval = min([self.scheduler.intervals.get(tf, 300) for tf in config.TIMEFRAMES])
+            actual_wait = max(0, min_interval - loop_duration)
+            
+            # Calculate next scan time
+            from datetime import datetime, timedelta
+            next_scan_time = datetime.now() + timedelta(seconds=actual_wait)
+            next_scan_str = next_scan_time.strftime('%H:%M:%S')
             
             logger.info(f"\n{'='*60}")
             logger.info(f"Loop #{loop_count} Summary:")
             logger.info(f"  Processed: {processed_count}/{len(symbols) * len(scannable_timeframes)}")
             logger.info(f"  Signals detected: {signal_count}")
             logger.info(f"  Duration: {loop_duration:.1f}s")
-            logger.info(f"  Next scan in: {min_wait_time:.0f}s")
+            logger.info(f"  Next scan at: {next_scan_str} ({actual_wait:.0f}s)")
             logger.info(f"\n{self.scheduler.get_status_report()}")
             logger.info(f"{'='*60}\n")
             
-            # Wait for minimum time until next scan
-            if min_wait_time > 0:
-                await asyncio.sleep(min(min_wait_time, 60))  # Check every 60s at most
+            # Wait for actual time until next scan
+            if actual_wait > 0:
+                await asyncio.sleep(min(actual_wait, 60))  # Check every 60s at most
             else:
                 await asyncio.sleep(1)  # Check again quickly if something is ready
     
