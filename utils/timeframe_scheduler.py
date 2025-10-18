@@ -50,12 +50,12 @@ class TimeframeScheduler:
     self.last_scanned_close: Dict[str, datetime] = {}
         
         # Initialize
-        for tf in timeframes:
-            minutes = self.TF_TO_MINUTES.get(tf, 60)
-            self.intervals[tf] = minutes * 60  # Convert to seconds
-            self.last_scanned_close[tf] = None
-            logger.info(f"[Scheduler] {tf}: aligned to candle close times (every {minutes}m)")
-    
+    for tf in timeframes:
+        minutes = self.TF_TO_MINUTES.get(tf, 60)
+        self.intervals[tf] = minutes * 60  # Convert to seconds
+        self.last_scanned_close[tf] = None
+        logger.info(f"[Scheduler] {tf}: aligned to candle close times (every {minutes}m)")
+
     def get_next_candle_close_time(self, timeframe: str) -> datetime:
         """
         Calculate the next candle close time for a timeframe.
@@ -71,45 +71,45 @@ class TimeframeScheduler:
         Returns:
             datetime object of next candle close time
         """
-    minutes = self.TF_TO_MINUTES.get(timeframe, 60)
-    now = datetime.now().replace(microsecond=0)
-        
-        # Calculate next close time based on timeframe interval
+        minutes = self.TF_TO_MINUTES.get(timeframe, 60)
+        now = datetime.now().replace(microsecond=0)
+            
+            # Calculate next close time based on timeframe interval
         current_minute = now.minute
         current_second = now.second
         
-    if minutes == 1:
-            # For 1m: close at next minute boundary
-            if current_second == 0:
-                next_close = now.replace(second=0, microsecond=0)
-            else:
-                next_close = (now + timedelta(minutes=1)).replace(second=0, microsecond=0)
-        
-    elif minutes < 60:
-            # For minutes (5m, 15m, 30m, etc.): align to minute boundaries
-            # Example: 15m closes at :00, :15, :30, :45
-            minutes_elapsed = (current_minute // minutes) * minutes
-            next_close_minute = minutes_elapsed + minutes
+        if minutes == 1:
+                # For 1m: close at next minute boundary
+                if current_second == 0:
+                    next_close = now.replace(second=0, microsecond=0)
+                else:
+                    next_close = (now + timedelta(minutes=1)).replace(second=0, microsecond=0)
             
-            if next_close_minute >= 60:
-                # Roll over to next hour
+        elif minutes < 60:
+                # For minutes (5m, 15m, 30m, etc.): align to minute boundaries
+                # Example: 15m closes at :00, :15, :30, :45
+                minutes_elapsed = (current_minute // minutes) * minutes
+                next_close_minute = minutes_elapsed + minutes
+                
+                if next_close_minute >= 60:
+                    # Roll over to next hour
+                    next_close = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+                else:
+                    # Same hour
+                    next_close = now.replace(minute=next_close_minute, second=0, microsecond=0)
+                    # If we're already past this minute's close time (shouldn't happen due to construction), roll
+                    if now >= next_close:
+                        rolled = now + timedelta(minutes=minutes)
+                        next_close = rolled.replace(minute=(rolled.minute // minutes) * minutes, second=0, microsecond=0)
+            
+        elif minutes == 60:
+                # For 1h: close at :00 of next hour
                 next_close = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
-            else:
-                # Same hour
-                next_close = now.replace(minute=next_close_minute, second=0, microsecond=0)
-                # If we're already past this minute's close time (shouldn't happen due to construction), roll
-                if now >= next_close:
-                    rolled = now + timedelta(minutes=minutes)
-                    next_close = rolled.replace(minute=(rolled.minute // minutes) * minutes, second=0, microsecond=0)
-        
-    elif minutes == 60:
-            # For 1h: close at :00 of next hour
-            next_close = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
-        
-    elif minutes == 1440:
-            # For 1d: close at 00:00 of next day
-            next_close = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-        
+            
+        elif minutes == 1440:
+                # For 1d: close at 00:00 of next day
+                next_close = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+            
         else:
             # For other intervals (2h, 4h, etc.)
             hours = minutes // 60
@@ -169,9 +169,9 @@ class TimeframeScheduler:
         if timeframe not in self.timeframes:
             return 0
         
-    now = datetime.now().replace(microsecond=0)
-    next_close = self.get_next_candle_close_time(timeframe)
-    wait_time = (next_close - now).total_seconds()
+        now = datetime.now().replace(microsecond=0)
+        next_close = self.get_next_candle_close_time(timeframe)
+        wait_time = (next_close - now).total_seconds()
         return max(0, wait_time)
     
     def get_next_scan_time(self, timeframe: str) -> str:
@@ -184,7 +184,7 @@ class TimeframeScheduler:
         Returns:
             Human-readable string of next candle close time
         """
-    next_close = self.get_next_candle_close_time(timeframe)
+        next_close = self.get_next_candle_close_time(timeframe)
         return next_close.strftime('%H:%M:%S')
     
     def get_scannable_timeframes(self) -> List[str]:
@@ -194,7 +194,7 @@ class TimeframeScheduler:
         Returns:
             List of timeframe strings ready for scanning
         """
-    return [tf for tf in self.timeframes if self.should_scan(tf)]
+        return [tf for tf in self.timeframes if self.should_scan(tf)]
     
     def get_status_report(self) -> str:
         """
