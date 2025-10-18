@@ -13,12 +13,12 @@ BINANCE_SECRET = os.getenv('BINANCE_SECRET', '')
 
 # Telegram Configuration
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '8452540404:AAHbUhJEHUa0GPvexznJBYdTP3qyIBZeBAU')
-TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '6465176588')
+TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '-4848555942')
 
 # Trading Configuration
 SYMBOL = os.getenv('SYMBOL', 'BTCUSDT')  # Single symbol mode (legacy)
 SYMBOLS = os.getenv('SYMBOLS', '')  # Multi-symbol mode: 'BTCUSDT,ETHUSDT,BNBUSDT' or 'ALL' for all coins
-TIMEFRAMES = os.getenv('TIMEFRAMES', '5m,15m,30m').split(',')
+TIMEFRAMES = os.getenv('TIMEFRAMES', '5m,15m').split(',')
 
 # Multi-coin Configuration
 FETCH_ALL_COINS = os.getenv('FETCH_ALL_COINS', '1') == '1'  # Set to 1 to fetch all Binance coins

@@ -5,6 +5,7 @@ import requests
 import logging
 from typing import Dict, Optional
 from datetime import datetime
+from utils.tradingview_helper import generate_tradingview_link
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ class TelegramSender:
         Format alert data into readable message
         
         Args:
-            alert_data: Dict with keys: time_date, mã, khung, hướng, loại, link, price
+            alert_data: Dict with keys: time_date, mã, khung, hướng, loại, price, tradingview_link
         
         Returns:
             Formatted message string
@@ -37,6 +38,9 @@ class TelegramSender:
         # Format price with appropriate decimals
         price = alert_data.get('price', 0)
         price_str = f"{price:,.2f}" if price else "N/A"
+        
+        # Get TradingView link
+        tv_link = alert_data.get('tradingview_link', '#')
         
         message = (
             f"🚨 *CHoCH SIGNAL DETECTED* 🚨\n\n"
@@ -46,7 +50,7 @@ class TelegramSender:
             f"📈 *Hướng:* {alert_data.get('hướng', 'N/A')}\n"
             f"🎯 *Loại:* {alert_data.get('loại', 'N/A')}\n"
             f"💵 *Price:* ${price_str}\n\n"
-            f"🔗 [View on TradingView]({alert_data.get('link', '#')})"
+            f"🔗 [View on TradingView]({tv_link})"
         )
         
         return message
@@ -125,61 +129,34 @@ def create_alert_data(symbol: str, timeframe: str, signal_type: str,
     Create alert data dictionary
     
     Args:
-        symbol: Trading symbol (e.g., 'BTCUSDT')
-        timeframe: Timeframe (e.g., '5m')
+        symbol: Trading symbol (e.g., 'BTCUSDT', 'ETHUSDT')
+        timeframe: Timeframe (e.g., '5m', '1h')
         signal_type: Signal type (e.g., 'CHoCH Up')
         direction: Direction ('Long' or 'Short')
         price: Current price
         timestamp: Signal timestamp
     
     Returns:
-        Alert data dictionary
+        Alert data dictionary with TradingView link
     """
-    # Convert timeframe to TradingView format
-    tv_interval = convert_tf_to_tradingview(timeframe)
-    
-    # Format symbol for TradingView (BTC/USDT -> BTCUSDT)
-    tv_symbol = symbol.replace('/', '')
-    
-    # Create TradingView link
-    link = f"https://www.tradingview.com/chart/?symbol=BINANCE:{tv_symbol}&interval={tv_interval}"
+    # Generate TradingView link
+    tv_link = generate_tradingview_link(
+        symbol=symbol,
+        timeframe=timeframe,
+        is_futures=True,
+        region='in'
+    )
     
     return {
         'time_date': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
-        'mã': tv_symbol,
+        'symbol': symbol,
+        'mã': symbol,
         'khung': timeframe,
-        'hướng': direction,
+        'hướng': direction,  # Should be 'Long' or 'Short'
         'loại': signal_type,
         'price': price,
-        'link': link
+        'tradingview_link': tv_link
     }
-
-
-def convert_tf_to_tradingview(timeframe: str) -> str:
-    """
-    Convert CCXT timeframe to TradingView interval format
-    
-    Args:
-        timeframe: CCXT format (e.g., '5m', '1h', '1d')
-    
-    Returns:
-        TradingView format (e.g., '5', '60', 'D')
-    """
-    mapping = {
-        '1m': '1',
-        '5m': '5',
-        '15m': '15',
-        '30m': '30',
-        '1h': '60',
-        '2h': '120',
-        '4h': '240',
-        '12h': '720',
-        '1d': 'D',
-        '1w': 'W',
-        '1M': 'M'
-    }
-    
-    return mapping.get(timeframe, timeframe.upper().replace('M', ''))
 
 
 # Example usage

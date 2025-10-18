@@ -1,0 +1,26 @@
+[Unit]
+Description=CHoCH Alert System - Cryptocurrency Trading Alert Bot
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=choch
+WorkingDirectory=/home/choch/choch-alert-backend
+Environment="PATH=/home/choch/choch-alert-backend/venv/bin"
+ExecStart=/home/choch/choch-alert-backend/venv/bin/python main.py
+Restart=always
+RestartSec=10
+StandardOutput=append:/var/log/choch-alert/choch_alert.log
+StandardError=append:/var/log/choch-alert/choch_alert_error.log
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Resource limits
+MemoryLimit=1G
+CPUQuota=50%
+
+[Install]
+WantedBy=multi-user.target

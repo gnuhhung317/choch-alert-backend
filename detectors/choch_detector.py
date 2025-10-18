@@ -40,6 +40,27 @@ class TimeframeState:
         self.bars.append(bar)
         self.prices.append(price)
         self.highs.append(is_high)
+
+    def reset(self):
+        """Reset state and clear stored pivots/flags.
+
+        Use this when you want to rebuild pivots from a fresh dataframe
+        (e.g. when monitor loop always supplies a full window). This
+        prevents duplicate/accumulating pivots across rebuilds.
+        """
+        self.prices = deque(maxlen=self.keep_pivots)
+        self.bars = deque(maxlen=self.keep_pivots)
+        self.highs = deque(maxlen=self.keep_pivots)
+
+        self.last_pivot_bar = None
+        self.last_pivot_price = None
+        self.last_six_up = False
+        self.last_six_down = False
+        self.last_six_bar_idx = None
+        self.pivot4 = None
+        self.choch_locked = False
+        self.choch_bar_idx = None
+        self.choch_price = None
     
     def pivot_count(self) -> int:
         """Get number of stored pivots"""
@@ -197,6 +218,9 @@ class ChochDetector:
         """
         Insert fake pivot if two consecutive pivots are same type
         Returns True if pivot was inserted
+        
+        IMPORTANT: Only insert ONE fake pivot per gap, even if gap has multiple extremes.
+        This prevents fake pivot explosion when reconstructing from limited bars.
         """
         if last_high != new_high:
             return False
@@ -218,6 +242,13 @@ class ChochDetector:
         if gap <= 0:
             return False
         
+        # Only insert if gap is small (1-3 bars)
+        # This prevents fake pivot explosion in limited dataframes
+        # When gap > 3, we skip fake pivot to keep count reasonable
+        if gap > 3:
+            logger.debug(f"Gap too large ({gap} bars), skipping fake pivot")
+            return False
+        
         # Find extreme in gap using integer positions
         first_bar_in_gap = last_bar_pos + 1
         last_bar_in_gap = new_bar_pos - 1
@@ -230,22 +261,23 @@ class ChochDetector:
                 return False
             
             if new_high:
-                # Looking for low
+                # Looking for low (opposite of the consecutive high)
                 insert_idx = gap_df['low'].idxmin()
                 insert_price = gap_df.loc[insert_idx, 'low']
             else:
-                # Looking for high
+                # Looking for high (opposite of the consecutive low)
                 insert_idx = gap_df['high'].idxmax()
                 insert_price = gap_df.loc[insert_idx, 'high']
             
             insert_bar = insert_idx
             insert_high = not new_high
             
-            # Validate
+            # Validate: fake pivot must be between last and new pivot
             if insert_bar > last_bar and insert_bar < new_bar:
                 state.store_pivot(insert_bar, insert_price, insert_high)
                 state.last_pivot_bar = insert_bar
                 state.last_pivot_price = insert_price
+                logger.debug(f"Fake {'PH' if insert_high else 'PL'} inserted @ {insert_price:.6f} in gap of {gap} bars")
                 return True
         
         except (KeyError, IndexError) as e:
@@ -368,46 +400,37 @@ class ChochDetector:
         
         return fire_choch_up, fire_choch_down
     
-    def process_new_bar(self, timeframe: str, df: pd.DataFrame) -> Dict:
+    def rebuild_pivots(self, timeframe: str, df: pd.DataFrame) -> int:
         """
-        Process new bar for a timeframe and detect CHoCH
+        Rebuild ALL pivots from a fresh dataframe window.
+        
+        This is called when monitor_loop fetches 50 bars and wants to
+        rebuild the pivot state from scratch. Pivots from the old state
+        are discarded and replaced with pivots from the new dataframe.
         
         Args:
-            timeframe: Timeframe identifier (e.g., '5m')
-            df: DataFrame with OHLCV data, index = timestamp or bar number
+            timeframe: Timeframe identifier
+            df: Fresh dataframe (e.g., 50 bars)
         
         Returns:
-            Dict with detection results: {
-                'choch_up': bool,
-                'choch_down': bool,
-                'signal_type': str or None,
-                'direction': str or None,
-                'price': float or None,
-                'timestamp': pd.Timestamp or None
-            }
+            Number of pivots built
         """
         state = self.get_state(timeframe)
-        result = {
-            'choch_up': False,
-            'choch_down': False,
-            'signal_type': None,
-            'direction': None,
-            'price': None,
-            'timestamp': None
-        }
+        
+        # RESET: Clear all previous state and pivots
+        state.reset()
         
         if len(df) < self.left + self.right + 1:
-            return result
+            return 0
         
         # Detect pivots in entire dataframe
         ph, pl = self.detect_pivots(df)
         
-        # Count total pivots in dataframe
         total_ph = ph.notna().sum()
         total_pl = pl.notna().sum()
-        logger.debug(f"[{timeframe}] Detected {total_ph} pivot highs, {total_pl} pivot lows in {len(df)} bars")
+        total_real_pivots = total_ph + total_pl
         
-        # Process ALL pivots in dataframe (not just the latest one)
+        # Process ALL pivots in dataframe
         for check_idx in range(self.left, len(df) - self.right):
             is_ph = pd.notna(ph.iloc[check_idx])
             is_pl = pd.notna(pl.iloc[check_idx])
@@ -426,20 +449,7 @@ class ChochDetector:
                 accept = variant != "NA" and self.allow_variants.get(variant, False)
             
             if accept:
-                # Check if this pivot is already stored
-                already_stored = False
-                if state.pivot_count() > 0:
-                    # Check last few pivots to avoid duplicates
-                    for i in range(min(3, state.pivot_count())):
-                        stored_bar, _, _ = state.get_pivot_from_end(i)
-                        if stored_bar == pivot_idx:
-                            already_stored = True
-                            break
-                
-                if already_stored:
-                    continue
-                
-                # Insert fake pivot if needed
+                # Insert fake pivot if needed (only once per gap)
                 if state.pivot_count() > 0:
                     last_bar, last_price, last_high = state.get_pivot_from_end(0)
                     self.insert_fake_pivot(state, df, last_bar, last_price, last_high, 
@@ -449,15 +459,50 @@ class ChochDetector:
                 state.store_pivot(pivot_idx, pivot_price, is_high)
                 state.last_pivot_bar = pivot_idx
                 state.last_pivot_price = pivot_price
-                
-                logger.debug(f"[{timeframe}] Stored {'PH' if is_high else 'PL'} @ {pivot_price:.6f} | Total pivots: {state.pivot_count()}")
-                
-                # Unlock CHoCH if new pivot after last six
-                if state.last_six_bar_idx is not None and pivot_idx > state.last_six_bar_idx:
-                    state.choch_locked = False
         
         # Check for 6-pattern
         self.check_six_pattern(state, df)
+        
+        pivot_after = state.pivot_count()
+        logger.info(f"[rebuild_pivots] {len(df)} bars → {total_real_pivots} real pivots → {pivot_after} total (with fakes)")
+        
+        return pivot_after
+    
+    def process_new_bar(self, timeframe: str, df: pd.DataFrame) -> Dict:
+        """
+        Process new bar for a timeframe and detect CHoCH
+        
+        IMPORTANT: Must call rebuild_pivots() FIRST if you want to rebuild
+        from a fresh dataframe. This method only detects CHoCH on the latest bar
+        using the current state's pivots.
+        
+        Args:
+            timeframe: Timeframe identifier (e.g., '5m')
+            df: DataFrame with OHLCV data, index = timestamp or bar number
+        
+        Returns:
+            Dict with detection results: {
+                'choch_up': bool,
+                'choch_down': bool,
+                'signal_type': str or None,
+                'direction': str or None,
+                'price': float or None,
+                'timestamp': pd.Timestamp or None
+            }
+        """
+        state = self.get_state(timeframe)
+        
+        result = {
+            'choch_up': False,
+            'choch_down': False,
+            'signal_type': None,
+            'direction': None,
+            'price': None,
+            'timestamp': None
+        }
+        
+        if len(df) == 0:
+            return result
         
         # Check for CHoCH on latest bar
         current_idx = df.index[-1]

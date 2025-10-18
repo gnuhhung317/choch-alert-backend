@@ -18,6 +18,8 @@ from detectors.choch_detector import ChochDetector
 from alert.telegram_sender import TelegramSender, create_alert_data
 from web.app import broadcast_alert, start_flask_background
 from visualization.chart_plotter import ChochChartPlotter
+from utils.tradingview_helper import add_tradingview_link_to_alert
+from utils.timeframe_scheduler import TimeframeScheduler
 
 # Setup logging with UTF-8 encoding to handle emoji characters
 logging.basicConfig(
@@ -89,6 +91,9 @@ class ChochAlertSystem:
         self.running = False
         self.tasks = []
         
+        # Initialize timeframe scheduler
+        self.scheduler = TimeframeScheduler(config.TIMEFRAMES)
+        
         logger.info("[OK] System initialized")
 
     async def on_new_data(self, symbol: str, timeframe: str, df: pd.DataFrame, is_new_bar: bool):
@@ -107,17 +112,16 @@ class ChochAlertSystem:
         key = f"{symbol}_{timeframe}"
         
         try:
-            # ⬇️ KHÔNG REBUILD PIVOT NỮA - Pivot đã rebuild ở monitor_loop
-            # Chỉ detect bar cuối với state hiện tại
+            # ⬇️ DETECT CHoCH TRÊN BAR CUỐI - Pivot đã rebuild ở monitor_loop
+            # Chỉ check CHoCH signal trên bar cuối
             state = self.detector.states.get(key)
             
             if state is None:
                 logger.warning(f"[{symbol}][{timeframe}] No state found")
                 return False
             
-            # ⬇️ DETECT TRÊN BAR CUỐI - dùng kết quả từ rebuild
-            df_last_bar = df.iloc[[-1]]
-            result = self.detector.process_new_bar(key, df_last_bar)
+            # ⬇️ DETECT TRÊN BAR CUỐI - dùng state từ rebuild_pivots
+            result = self.detector.process_new_bar(key, df)
             
             logger.debug(f"[{symbol}][{timeframe}] Detection: choch_up={result.get('choch_up')}, choch_down={result.get('choch_down')}")
             
@@ -172,10 +176,13 @@ class ChochAlertSystem:
                     symbol=symbol,
                     timeframe=timeframe,
                     signal_type=result.get('signal_type', 'CHoCH'),
-                    direction=result.get('direction', 'UP' if result.get('choch_up') else 'DOWN'),
+                    direction=result.get('direction', 'Long'),
                     price=result.get('price', df['close'].iloc[-1]),
                     timestamp=result.get('timestamp', df.index[-1])
                 )
+                
+                # Add TradingView link to alert
+                alert_data = add_tradingview_link_to_alert(alert_data, is_futures=True, region='in')
                 
                 logger.info(f"[TELEGRAM] 📤 Sending alert for {symbol} {timeframe}")
                 
@@ -393,15 +400,27 @@ class ChochAlertSystem:
             await self.stop()
     
     async def monitor_loop(self, symbols: list):
-        """Sequential monitoring loop - fetch 50 bars, process, discard"""
+        """
+        Sequential monitoring loop with per-timeframe scheduling.
+        Each timeframe is scanned only when its interval has passed.
+        """
         loop_count = 0
         
         while self.running:
             loop_count += 1
             loop_start = asyncio.get_event_loop().time()
             
+            # Get timeframes that are ready to scan
+            scannable_timeframes = self.scheduler.get_scannable_timeframes()
+            
+            if not scannable_timeframes:
+                # No timeframe ready yet, wait a bit
+                await asyncio.sleep(1)
+                continue
+            
             logger.info(f"\n{'='*60}")
-            logger.info(f"Loop #{loop_count} - Processing {len(symbols)} symbols × {len(config.TIMEFRAMES)} timeframes")
+            logger.info(f"Loop #{loop_count} - Scanning: {', '.join(scannable_timeframes)}")
+            logger.info(f"Processing {len(symbols)} symbols × {len(scannable_timeframes)} timeframes")
             logger.info(f"{'='*60}")
             
             processed_count = 0
@@ -412,8 +431,8 @@ class ChochAlertSystem:
                 if not self.running:
                     break
                 
-                # Process all timeframes for this symbol
-                for timeframe in config.TIMEFRAMES:
+                # Process only scannable timeframes for this symbol
+                for timeframe in scannable_timeframes:
                     try:
                         # ⬇️ FETCH 50 BARS
                         logger.info(f"[{symbol}][{timeframe}] Fetching 50 bars...")
@@ -429,15 +448,12 @@ class ChochAlertSystem:
                         
                         key = f"{symbol}_{timeframe}"
                         
-                        # ⬇️ LUÔN REBUILD PIVOT TỪ 50 BARS
+                        # ⬇️ REBUILD PIVOT TỪ 50 BARS
                         logger.info(f"[{symbol}][{timeframe}] Rebuilding pivots from {len(df)} bars...")
-                        self.detector.process_new_bar(key, df)  # Rebuild pivots from all 50 bars
+                        pivot_count = self.detector.rebuild_pivots(timeframe, df)
+                        logger.info(f"[{symbol}][{timeframe}] ✓ Built {pivot_count} pivots")
                         
-                        state = self.detector.states.get(key)
-                        if state:
-                            logger.info(f"[{symbol}][{timeframe}] ✓ Built {state.pivot_count()} pivots")
-                        
-                        # ⬇️ DETECT CHoCH TRÊN BAR CUỐI (CHỈ 1 BAR)
+                        # ⬇️ DETECT CHoCH TRÊN BAR CUỐI (dùng state từ rebuild_pivots)
                         result = await self.on_new_data(symbol, timeframe, df, is_new_bar=True)
                         
                         if result:  # Signal detected
@@ -454,27 +470,34 @@ class ChochAlertSystem:
                     except Exception as e:
                         logger.error(f"Error processing {symbol} {timeframe}: {e}")
                         await asyncio.sleep(1)
+                
+                # After processing all scannable timeframes for this symbol, sleep a tiny bit
+                await asyncio.sleep(0.1)
             
-            # Calculate how long the loop took
+            # Mark timeframes as scanned
+            for timeframe in scannable_timeframes:
+                self.scheduler.mark_scanned(timeframe)
+            
+            # Calculate loop duration
             loop_duration = asyncio.get_event_loop().time() - loop_start
             
-            # Calculate minimum interval based on shortest timeframe
-            tf_minutes = min([self.fetcher._timeframe_to_minutes(tf) for tf in config.TIMEFRAMES])
-            min_interval = tf_minutes * 60  # Convert to seconds
-            
-            # Wait until next loop (at least the minimum timeframe interval)
-            wait_time = max(60, min_interval - loop_duration)  # At least 60 seconds
+            # Get minimum wait time among all timeframes
+            min_wait_time = min([self.scheduler.get_wait_time(tf) for tf in config.TIMEFRAMES])
             
             logger.info(f"\n{'='*60}")
             logger.info(f"Loop #{loop_count} Summary:")
-            logger.info(f"  Processed: {processed_count}/{len(symbols) * len(config.TIMEFRAMES)}")
+            logger.info(f"  Processed: {processed_count}/{len(symbols) * len(scannable_timeframes)}")
             logger.info(f"  Signals detected: {signal_count}")
             logger.info(f"  Duration: {loop_duration:.1f}s")
-            logger.info(f"  Fetch: 50 bars/coin")
-            logger.info(f"  Waiting: {wait_time:.0f}s until next cycle")
+            logger.info(f"  Next scan in: {min_wait_time:.0f}s")
+            logger.info(f"\n{self.scheduler.get_status_report()}")
             logger.info(f"{'='*60}\n")
             
-            await asyncio.sleep(wait_time)
+            # Wait for minimum time until next scan
+            if min_wait_time > 0:
+                await asyncio.sleep(min(min_wait_time, 60))  # Check every 60s at most
+            else:
+                await asyncio.sleep(1)  # Check again quickly if something is ready
     
     async def stop(self):
         """Stop the alert system"""
