@@ -474,24 +474,37 @@ class ChochAlertSystem:
                 # After processing all scannable timeframes for this symbol, sleep a tiny bit
                 await asyncio.sleep(0.1)
             
-            # Mark timeframes as scanned
+            # Mark timeframes as scanned at their previous candle close
             for timeframe in scannable_timeframes:
-                self.scheduler.mark_scanned(timeframe)
+                try:
+                    prev_close = self.scheduler.get_prev_candle_close_time(timeframe)
+                    # Some schedulers may accept only timeframe; fall back if signature differs
+                    self.scheduler.last_scanned_close[timeframe] = prev_close
+                except Exception:
+                    # Fallback to simple mark
+                    self.scheduler.mark_scanned(timeframe)
             
             # Calculate loop duration
             loop_duration = asyncio.get_event_loop().time() - loop_start
             
-            # Get minimum wait time among all timeframes (this is the interval, e.g., 300s for 5m)
-            min_wait_time = min([self.scheduler.get_wait_time(tf) for tf in config.TIMEFRAMES])
-            
-            # Calculate actual wait time: interval - duration already spent
-            # Example: 300s interval - 165.1s duration = 134.9s to wait
-            min_interval = min([self.scheduler.intervals.get(tf, 300) for tf in config.TIMEFRAMES])
-            actual_wait = max(0, min_interval - loop_duration)
-            
-            # Calculate next scan time
+            # Compute next scan as nearest next candle close among all configured timeframes
             from datetime import datetime, timedelta
-            next_scan_time = datetime.now() + timedelta(seconds=actual_wait)
+            next_close_times = []
+            for tf in config.TIMEFRAMES:
+                try:
+                    next_close_times.append(self.scheduler.get_next_candle_close_time(tf))
+                except Exception:
+                    # Fallback: use now + wait
+                    wait = self.scheduler.get_wait_time(tf)
+                    next_close_times.append(datetime.now() + timedelta(seconds=wait))
+            
+            if next_close_times:
+                next_scan_time = min(next_close_times)
+            else:
+                next_scan_time = datetime.now() + timedelta(seconds=60)
+            
+            # Seconds remaining until next scan
+            actual_wait = max(0, (next_scan_time - datetime.now()).total_seconds())
             next_scan_str = next_scan_time.strftime('%H:%M:%S')
             
             logger.info(f"\n{'='*60}")
@@ -503,11 +516,13 @@ class ChochAlertSystem:
             logger.info(f"\n{self.scheduler.get_status_report()}")
             logger.info(f"{'='*60}\n")
             
-            # Wait for actual time until next scan
-            if actual_wait > 0:
-                await asyncio.sleep(min(actual_wait, 60))  # Check every 60s at most
-            else:
-                await asyncio.sleep(1)  # Check again quickly if something is ready
+            # Wait in small chunks so we don't miss the boundary due to long sleep
+            # Sleep up to 5 seconds at a time
+            remaining = actual_wait
+            while remaining > 0 and self.running:
+                chunk = 5 if remaining > 5 else remaining
+                await asyncio.sleep(chunk)
+                remaining -= chunk
     
     async def stop(self):
         """Stop the alert system"""
