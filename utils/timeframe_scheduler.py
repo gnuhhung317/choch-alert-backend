@@ -140,6 +140,8 @@ class TimeframeScheduler:
         """
         Check if a timeframe should be scanned now.
         Scan right after the previous candle close, and only once per close.
+        
+        CRITICAL: Add buffer time to ensure the closed candle data is available.
         """
         if timeframe not in self.timeframes:
             logger.warning(f"[Scheduler] Unknown timeframe: {timeframe}")
@@ -153,8 +155,18 @@ class TimeframeScheduler:
         if last_scanned is not None and last_scanned >= prev_close:
             return False
 
-        # Ready to scan if the candle is closed
-        return now >= prev_close
+        # ⚠️ CRITICAL FIX: Add 30-second buffer after candle close
+        # This ensures the closed candle data is fully available from exchange
+        buffer_time = timedelta(seconds=30)
+        ready_time = prev_close + buffer_time
+        
+        # Ready to scan if the candle is closed AND buffer time has passed
+        is_ready = now >= ready_time
+        
+        if is_ready:
+            logger.debug(f"[Scheduler] {timeframe} ready: candle closed at {prev_close}, buffer passed at {ready_time}")
+        
+        return is_ready
 
     def get_wait_time(self, timeframe: str) -> float:
         """

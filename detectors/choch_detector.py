@@ -473,7 +473,7 @@ class ChochDetector:
         Process new bar for a timeframe and detect CHoCH
         
         IMPORTANT: Must call rebuild_pivots() FIRST if you want to rebuild
-        from a fresh dataframe. This method only detects CHoCH on the latest bar
+        from a fresh dataframe. This method only detects CHoCH on CLOSED bars
         using the current state's pivots.
         
         Args:
@@ -501,11 +501,18 @@ class ChochDetector:
             'timestamp': None
         }
         
-        if len(df) == 0:
+        if len(df) < 2:
             return result
         
-        # Check for CHoCH on latest bar
-        current_idx = df.index[-1]
+        # ⚠️ CRITICAL FIX: Check CHoCH on SECOND-TO-LAST bar (guaranteed closed)
+        # Last bar might still be open, so use the previous completed bar
+        if len(df) >= 2:
+            current_idx = df.index[-2]  # Second-to-last bar (definitely closed)
+            logger.debug(f"[{timeframe}] Checking CHoCH on CLOSED bar: {current_idx}")
+        else:
+            logger.warning(f"[{timeframe}] Not enough bars for closed candle detection")
+            return result
+        
         fire_up, fire_down = self.check_choch(df, state, current_idx)
         
         if fire_up or fire_down:

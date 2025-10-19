@@ -126,8 +126,13 @@ class ChochAlertSystem:
             logger.debug(f"[{symbol}][{timeframe}] Detection: choch_up={result.get('choch_up')}, choch_down={result.get('choch_down')}")
             
             if result.get('choch_up') or result.get('choch_down'):
+                # CHoCH detected on second-to-last bar (closed candle)
+                closed_bar_idx = df.index[-2] if len(df) >= 2 else df.index[-1]
+                closed_bar_price = df['close'].iloc[-2] if len(df) >= 2 else df['close'].iloc[-1]
+                
                 logger.info(f"[SIGNAL] 🎯 CHoCH detected on {symbol} {timeframe}: {result.get('signal_type')}")
-                logger.info(f"[{symbol}][{timeframe}] Bar: {df.index[-1]} | Close: {df['close'].iloc[-1]:.8f}")
+                logger.info(f"[{symbol}][{timeframe}] CLOSED Bar: {closed_bar_idx} | Close: {closed_bar_price:.8f}")
+                logger.info(f"[{symbol}][{timeframe}] Latest Bar: {df.index[-1]} | Close: {df['close'].iloc[-1]:.8f} (may still be open)")
                 
                 # Get pivot data for visualization
                 pivots = []
@@ -270,6 +275,12 @@ class ChochAlertSystem:
                         # Process all historical data to build pivots
                         logger.info(f"[{symbol}][{timeframe}] Processing {len(df)} bars...")
                         key = f"{symbol}_{timeframe}"
+                        
+                        # ⬇️ REBUILD PIVOTS FIRST
+                        pivot_count = self.detector.rebuild_pivots(key, df)
+                        logger.info(f"[{symbol}][{timeframe}] Built {pivot_count} pivots")
+                        
+                        # ⬇️ THEN CHECK CHoCH ON LAST BAR
                         result = self.detector.process_new_bar(key, df)
                         
                         # Get pivot data
@@ -283,8 +294,6 @@ class ChochAlertSystem:
                                     'price': price,
                                     'is_high': is_high
                                 })
-                        
-                        logger.info(f"[{symbol}][{timeframe}] Built {len(pivots)} pivots")
                         
                         # Prepare CHoCH info
                         choch_info = None
@@ -450,7 +459,7 @@ class ChochAlertSystem:
                         
                         # ⬇️ REBUILD PIVOT TỪ 50 BARS
                         logger.info(f"[{symbol}][{timeframe}] Rebuilding pivots from {len(df)} bars...")
-                        pivot_count = self.detector.rebuild_pivots(timeframe, df)
+                        pivot_count = self.detector.rebuild_pivots(key, df)
                         logger.info(f"[{symbol}][{timeframe}] ✓ Built {pivot_count} pivots")
                         
                         # ⬇️ DETECT CHoCH TRÊN BAR CUỐI (dùng state từ rebuild_pivots)
