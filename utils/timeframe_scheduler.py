@@ -74,25 +74,27 @@ class TimeframeScheduler:
         now = datetime.now().replace(microsecond=0)
 
         if minutes < 60:
-            # Minute-based timeframes
+            # Minute-based timeframes (5m, 15m, 30m)
             # Find next boundary where minute % minutes == 0 and seconds == 0
-            next_minute = (now.minute // minutes) * minutes + minutes
-            hour = now.hour
-            day = now.date()
+            current_minute = now.minute
+            next_minute = ((current_minute // minutes) + 1) * minutes
+            
             if next_minute >= 60:
-                next_minute -= 60
-                hour = (hour + 1) % 24
-                if hour == 0:
-                    # Move to next day
-                    from datetime import date
-                    next_dt = datetime(now.year, now.month, now.day, 0, next_minute, 0)
-                    if next_dt <= now:
-                        next_dt += timedelta(days=1)
-                    return next_dt
-            next_dt = now.replace(minute=next_minute, second=0)
+                # Roll over to next hour
+                next_minute = 0
+                next_hour = now.hour + 1
+                if next_hour >= 24:
+                    # Roll over to next day
+                    next_dt = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0)
+                else:
+                    next_dt = now.replace(hour=next_hour, minute=0, second=0)
+            else:
+                next_dt = now.replace(minute=next_minute, second=0)
+            
+            # Safety check: if calculated time is not in future, add one period
             if next_dt <= now:
-                # Safety roll forward
-                next_dt = (now + timedelta(minutes=minutes)).replace(second=0)
+                next_dt = next_dt + timedelta(minutes=minutes)
+            
             return next_dt
 
         if minutes == 60:
@@ -124,9 +126,52 @@ class TimeframeScheduler:
         return next_dt
 
     def get_prev_candle_close_time(self, timeframe: str) -> datetime:
-        """Get previous candle close time for a timeframe."""
-        next_close = self.get_next_candle_close_time(timeframe)
-        return next_close - timedelta(seconds=self.intervals.get(timeframe, 60))
+        """
+        Get previous candle close time for a timeframe.
+        
+        FIXED: Calculate actual previous candle close based on current time,
+        not just next_close - interval.
+        """
+        minutes = self.TF_TO_MINUTES.get(timeframe, 60)
+        now = datetime.now().replace(microsecond=0)
+
+        if minutes < 60:
+            # Minute-based timeframes (5m, 15m, 30m)
+            # Find the most recent boundary where minute % minutes == 0
+            current_minute_boundary = (now.minute // minutes) * minutes
+            prev_close = now.replace(minute=current_minute_boundary, second=0)
+            
+            # If we're exactly on the boundary, go back one period
+            if prev_close == now.replace(second=0):
+                prev_close = prev_close - timedelta(minutes=minutes)
+            
+            return prev_close
+
+        elif minutes == 60:
+            # Hourly: previous hour at :00
+            prev_close = now.replace(minute=0, second=0)
+            if prev_close >= now:
+                prev_close = prev_close - timedelta(hours=1)
+            return prev_close
+
+        elif minutes == 1440:
+            # Daily: previous day at 00:00
+            prev_close = now.replace(hour=0, minute=0, second=0)
+            if prev_close >= now:
+                prev_close = prev_close - timedelta(days=1)
+            return prev_close
+
+        else:
+            # Multi-hour (2h, 4h, 6h, etc.)
+            hours = minutes // 60
+            current_block = (now.hour // hours) * hours
+            prev_close = now.replace(hour=current_block, minute=0, second=0)
+            
+            # If we're exactly on the boundary, go back one period
+            if prev_close >= now:
+                prev_close = prev_close - timedelta(hours=hours)
+            
+            return prev_close
 
     def mark_scanned(self, timeframe: str, close_time: Optional[datetime] = None) -> None:
         """Mark a timeframe's candle close as scanned to prevent duplicates."""
@@ -152,7 +197,14 @@ class TimeframeScheduler:
 
         # Avoid duplicate scans: only scan if we haven't scanned this close yet
         last_scanned = self.last_scanned_close.get(timeframe)
+        
+        # DEBUG: Log detailed timing info
+        logger.debug(f"[Scheduler] {timeframe}: now={now.strftime('%H:%M:%S')}, "
+                    f"prev_close={prev_close.strftime('%H:%M:%S')}, "
+                    f"last_scanned={last_scanned.strftime('%H:%M:%S') if last_scanned else 'None'}")
+        
         if last_scanned is not None and last_scanned >= prev_close:
+            logger.debug(f"[Scheduler] {timeframe} SKIP: already scanned this candle close")
             return False
 
         # ⚠️ CRITICAL FIX: Add 30-second buffer after candle close
@@ -164,7 +216,11 @@ class TimeframeScheduler:
         is_ready = now >= ready_time
         
         if is_ready:
-            logger.debug(f"[Scheduler] {timeframe} ready: candle closed at {prev_close}, buffer passed at {ready_time}")
+            logger.debug(f"[Scheduler] {timeframe} READY: candle closed at {prev_close.strftime('%H:%M:%S')}, "
+                        f"buffer passed at {ready_time.strftime('%H:%M:%S')}")
+        else:
+            wait_seconds = (ready_time - now).total_seconds()
+            logger.debug(f"[Scheduler] {timeframe} WAIT: need {wait_seconds:.0f}s more")
         
         return is_ready
 
