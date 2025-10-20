@@ -34,6 +34,8 @@ class TimeframeState:
         self.choch_locked = False
         self.choch_bar_idx: Optional[int] = None  # Bar where CHoCH triggered
         self.choch_price: Optional[float] = None  # Price where CHoCH triggered
+        
+        # Đơn giản hóa - không cần confirmation tracking
     
     def store_pivot(self, bar: int, price: float, is_high: bool):
         """Store a pivot point"""
@@ -61,6 +63,8 @@ class TimeframeState:
         self.choch_locked = False
         self.choch_bar_idx = None
         self.choch_price = None
+        
+        # Đơn giản hóa - không cần reset confirmation fields
     
     def pivot_count(self) -> int:
         """Get number of stored pivots"""
@@ -349,56 +353,81 @@ class ChochDetector:
     def check_choch(self, df: pd.DataFrame, state: TimeframeState, 
                     current_idx: int) -> Tuple[bool, bool]:
         """
-        Check for CHoCH signal at current bar
+        Kiểm tra CHoCH với confirmation (CHỈ SỬ DỤNG CLOSED CANDLES):
+        - CHoCH Up: Nến sau CHoCH phải có low > high của nến trước CHoCH
+        - CHoCH Down: Nến sau CHoCH phải có high < low của nến trước CHoCH
+        
+        IMPORTANT: Tất cả nến (pre-CHoCH, CHoCH, confirmation) đều phải đã ĐÓNG
+        
         Returns: (fire_choch_up, fire_choch_down)
         """
         if state.pivot_count() < 6:
             return False, False
-        
+
         if state.last_six_bar_idx is None:
             return False, False
-        
+
         # Must be after six pattern
         is_after_six = current_idx > state.last_six_bar_idx
-        
+
         if not is_after_six:
             return False, False
-        
-        # Get current and previous bars
+
+        # ⚠️ CRITICAL: Cần ít nhất 3 nến ĐÃ ĐÓNG cho confirmation logic
+        # current_idx là nến confirmation cuối cùng (ĐÃ ĐÓNG)
+        # Không còn cần lo về nến đang mở vì đã được loại bỏ ở fetcher
         try:
-            current = df.loc[current_idx]
-            prev_idx = df.index[df.index.get_loc(current_idx) - 1]
-            prev = df.loc[prev_idx]
+            current_loc = df.index.get_loc(current_idx)
+            if current_loc < 2:  # Need at least 3 bars total
+                return False, False
+                
+            current = df.loc[current_idx]  # Nến confirmation (ĐÃ ĐÓNG)
+            prev_idx = df.index[current_loc - 1]
+            prev = df.loc[prev_idx]  # Nến CHoCH (ĐÃ ĐÓNG)
+            pre_prev_idx = df.index[current_loc - 2] 
+            pre_prev = df.loc[pre_prev_idx]  # Nến trước CHoCH (ĐÃ ĐÓNG)
         except (KeyError, IndexError):
             return False, False
+
+        # CHoCH conditions on previous bar (nến CHoCH - ĐÃ ĐÓNG)
+        # CHoCH Up: low[prev] > low[pre_prev] AND close[prev] > high[pre_prev] AND close[prev] > pivot4
+        choch_up_bar = (prev['low'] > pre_prev['low'] and 
+                       prev['close'] > pre_prev['high'] and 
+                       prev['close'] > state.pivot4)
         
-        # CHoCH conditions
-        # CHoCH Up: low[0] > low[1] AND close[0] > high[1] AND close[0] > pivot4
-        choch_up_bar = (current['low'] > prev['low'] and 
-                       current['close'] > prev['high'] and 
-                       current['close'] > state.pivot4)
-        
-        # CHoCH Down: high[0] < high[1] AND close[0] < low[1] AND close[0] < pivot4
-        choch_down_bar = (current['high'] < prev['high'] and 
-                         current['close'] < prev['low'] and 
-                         current['close'] < state.pivot4)
-        
+        # CHoCH Down: high[prev] < high[pre_prev] AND close[prev] < low[pre_prev] AND close[prev] < pivot4
+        choch_down_bar = (prev['high'] < pre_prev['high'] and 
+                         prev['close'] < pre_prev['low'] and 
+                         prev['close'] < state.pivot4)
+
         # Match with pattern direction
         base_up = is_after_six and state.last_six_down and choch_up_bar
         base_down = is_after_six and state.last_six_up and choch_down_bar
+
+        # Confirmation conditions (TẤT CẢ ĐỀU ĐÃ ĐÓNG):
+        # CHoCH Up: current bar low > high của nến trước CHoCH (pre_prev)
+        confirm_up = base_up and (current['low'] > pre_prev['high'])
         
-        # Fire only once (lock mechanism)
-        fire_choch_up = (not state.choch_locked) and base_up
-        fire_choch_down = (not state.choch_locked) and base_down
-        
-        if fire_choch_up or fire_choch_down:
+        # CHoCH Down: current bar high < low của nến trước CHoCH (pre_prev)  
+        confirm_down = base_down and (current['high'] < pre_prev['low'])
+
+        # Fire signal nếu có confirmation và chưa lock
+        if not state.choch_locked and (confirm_up or confirm_down):
             state.choch_locked = True
-            # Save CHoCH bar and price for visualization
-            state.choch_bar_idx = current_idx
-            state.choch_price = current['close']
-            logger.info(f"[CHoCH] ✓✓✓ DETECTED: {'UP' if fire_choch_up else 'DOWN'} @ {current['close']:.6f} ✓✓✓")
-        
-        return fire_choch_up, fire_choch_down
+            state.choch_bar_idx = prev_idx  # CHoCH occurred at previous bar (ĐÃ ĐÓNG)
+            state.choch_price = prev['close']  # CHoCH price (ĐÃ ĐÓNG)
+            
+            fire_choch_up = confirm_up
+            fire_choch_down = confirm_down
+            
+            logger.info(f"[CHoCH] ✅ CONFIRMED: {'UP' if confirm_up else 'DOWN'} @ {prev['close']:.6f} (ALL CLOSED CANDLES)")
+            logger.info(f"   CHoCH bar: {prev_idx} (O:{prev['open']}, H:{prev['high']}, L:{prev['low']}, C:{prev['close']}) [CLOSED]")
+            logger.info(f"   Pre-CHoCH: {pre_prev_idx} (O:{pre_prev['open']}, H:{pre_prev['high']}, L:{pre_prev['low']}, C:{pre_prev['close']}) [CLOSED]")
+            logger.info(f"   Confirm bar: {current_idx} (O:{current['open']}, H:{current['high']}, L:{current['low']}, C:{current['close']}) [CLOSED]")
+            
+            return fire_choch_up, fire_choch_down
+
+        return False, False
     
     def rebuild_pivots(self, timeframe: str, df: pd.DataFrame) -> int:
         """
@@ -470,15 +499,13 @@ class ChochDetector:
     
     def process_new_bar(self, timeframe: str, df: pd.DataFrame) -> Dict:
         """
-        Process new bar for a timeframe and detect CHoCH
+        Process new bar for a timeframe and detect CHoCH (CLOSED CANDLES ONLY)
         
-        IMPORTANT: Must call rebuild_pivots() FIRST if you want to rebuild
-        from a fresh dataframe. This method only detects CHoCH on CLOSED bars
-        using the current state's pivots.
+        IMPORTANT: DataFrame chỉ chứa CLOSED candles (open candle đã được loại bỏ ở fetcher)
         
         Args:
             timeframe: Timeframe identifier (e.g., '5m')
-            df: DataFrame with OHLCV data, index = timestamp or bar number
+            df: DataFrame with CLOSED OHLCV data only, index = timestamp
         
         Returns:
             Dict with detection results: {
@@ -501,17 +528,13 @@ class ChochDetector:
             'timestamp': None
         }
         
-        if len(df) < 2:
+        if len(df) < 3:
+            logger.debug(f"[{timeframe}] Not enough CLOSED bars for CHoCH confirmation (need 3, have {len(df)})")
             return result
         
-        # ⚠️ CRITICAL FIX: Check CHoCH on SECOND-TO-LAST bar (guaranteed closed)
-        # Last bar might still be open, so use the previous completed bar
-        if len(df) >= 2:
-            current_idx = df.index[-2]  # Second-to-last bar (definitely closed)
-            logger.debug(f"[{timeframe}] Checking CHoCH on CLOSED bar: {current_idx}")
-        else:
-            logger.warning(f"[{timeframe}] Not enough bars for closed candle detection")
-            return result
+        # ✅ Nến confirmation là nến cuối cùng (ĐÃ ĐÓNG - vì open candle đã được loại bỏ)
+        current_idx = df.index[-1]  # Latest CLOSED bar (confirmation candle)
+        logger.debug(f"[{timeframe}] Checking CHoCH confirmation on CLOSED bar: {current_idx}")
         
         fire_up, fire_down = self.check_choch(df, state, current_idx)
         
@@ -520,7 +543,8 @@ class ChochDetector:
             result['choch_down'] = fire_down
             result['signal_type'] = 'CHoCH Up' if fire_up else 'CHoCH Down'
             result['direction'] = 'Long' if fire_up else 'Short'
-            result['price'] = df.loc[current_idx, 'close']
-            result['timestamp'] = current_idx if isinstance(current_idx, pd.Timestamp) else pd.Timestamp.now()
+            # Use CHoCH price and timestamp (đã đóng)
+            result['price'] = state.choch_price
+            result['timestamp'] = current_idx
         
         return result

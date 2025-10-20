@@ -37,7 +37,20 @@ class TelegramSender:
         """
         # Format price with appropriate decimals
         price = alert_data.get('price', 0)
-        price_str = f"{price:,.2f}" if price else "N/A"
+        
+        # Better price formatting based on price range
+        if price == 0:
+            price_str = "N/A"
+        elif price < 0.001:
+            price_str = f"${price:.8f}"  # Very small prices (like NEIRO)
+        elif price < 0.01:
+            price_str = f"${price:.6f}"
+        elif price < 1:
+            price_str = f"${price:.4f}"
+        elif price < 100:
+            price_str = f"${price:.3f}"
+        else:
+            price_str = f"${price:,.2f}"
         
         # Get TradingView link
         tv_link = alert_data.get('tradingview_link', '#')
@@ -49,7 +62,7 @@ class TelegramSender:
             f"📊 *Khung:* {alert_data.get('khung', 'N/A')}\n"
             f"📈 *Hướng:* {alert_data.get('hướng', 'N/A')}\n"
             f"🎯 *Loại:* {alert_data.get('loại', 'N/A')}\n"
-            f"💵 *Price:* ${price_str}\n\n"
+            f"💵 *Price:* {price_str}\n\n"
             f"🔗 [View on TradingView]({tv_link})"
         )
         

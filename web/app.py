@@ -1,12 +1,20 @@
 """
 Flask Web Application with SocketIO for real-time alert display
+Now with SQLite database storage
 """
-from flask import Flask, render_template
+from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
 import logging
-from typing import Dict
+from typing import Dict, List
 import threading
+import os
+import sys
+
+# Add parent directory to path for imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from database.alert_db import AlertDatabase, get_database
 
 logger = logging.getLogger(__name__)
 
@@ -17,9 +25,11 @@ CORS(app)
 
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
-# Store alerts in memory (last 100)
-alerts_history = []
-MAX_ALERTS = 100
+# Initialize database
+db = get_database('data/choch_alerts.db')
+
+# Maximum alerts to keep in memory for real-time updates
+MAX_RECENT_ALERTS = 100
 
 
 @app.route('/')
@@ -31,7 +41,77 @@ def index():
 @app.route('/health')
 def health():
     """Health check endpoint"""
-    return {'status': 'ok', 'alerts_count': len(alerts_history)}
+    try:
+        stats = db.get_alert_stats()
+        return {
+            'status': 'ok', 
+            'alerts_count': stats.get('total_alerts', 0),
+            'database': 'connected'
+        }
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return {'status': 'error', 'message': str(e)}, 500
+
+
+@app.route('/api/alerts')
+def get_alerts():
+    """API endpoint to get alerts with filtering"""
+    try:
+        # Get query parameters
+        limit = min(int(request.args.get('limit', 100)), 1000)  # Max 1000
+        offset = int(request.args.get('offset', 0))
+        
+        # Filter parameters
+        symbols = request.args.getlist('symbol')
+        timeframes = request.args.getlist('timeframe') 
+        directions = request.args.getlist('direction')
+        signal_types = request.args.getlist('signal_type')
+        
+        # Get filtered alerts
+        if any([symbols, timeframes, directions, signal_types]):
+            alerts = db.filter_alerts(
+                symbols=symbols if symbols else None,
+                timeframes=timeframes if timeframes else None,
+                directions=directions if directions else None,
+                signal_types=signal_types if signal_types else None,
+                limit=limit,
+                offset=offset
+            )
+        else:
+            alerts = db.get_recent_alerts(limit=limit, offset=offset)
+        
+        return jsonify({
+            'alerts': alerts,
+            'count': len(alerts),
+            'limit': limit,
+            'offset': offset
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting alerts: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/alerts/stats')
+def get_alert_statistics():
+    """API endpoint for alert statistics"""
+    try:
+        stats = db.get_alert_stats()
+        return jsonify(stats)
+    except Exception as e:
+        logger.error(f"Error getting stats: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/alerts/unique-values')
+def get_unique_values():
+    """API endpoint for unique filter values"""
+    try:
+        unique_values = db.get_unique_values()
+        return jsonify(unique_values)
+    except Exception as e:
+        logger.error(f"Error getting unique values: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 @socketio.on('connect')
@@ -39,7 +119,13 @@ def handle_connect():
     """Handle client connection"""
     logger.info(f'Client connected')
     # Send recent alerts to newly connected client
-    emit('alerts_history', alerts_history)
+    try:
+        recent_alerts = db.get_recent_alerts(limit=MAX_RECENT_ALERTS)
+        emit('alerts_history', recent_alerts)
+        logger.info(f"Sent {len(recent_alerts)} recent alerts to new client")
+    except Exception as e:
+        logger.error(f"Error sending alerts to new client: {e}")
+        emit('alerts_history', [])
 
 
 @socketio.on('disconnect')
@@ -51,30 +137,44 @@ def handle_disconnect():
 @socketio.on('request_history')
 def handle_request_history():
     """Send alert history to client"""
-    emit('alerts_history', alerts_history)
+    try:
+        recent_alerts = db.get_recent_alerts(limit=MAX_RECENT_ALERTS)
+        emit('alerts_history', recent_alerts)
+        logger.info(f"Sent {len(recent_alerts)} alerts on history request")
+    except Exception as e:
+        logger.error(f"Error sending alert history: {e}")
+        emit('alerts_history', [])
 
 
 def broadcast_alert(alert_data: Dict):
     """
-    Broadcast alert to all connected clients
+    Broadcast alert to all connected clients and save to database
     
     Args:
         alert_data: Alert data dictionary
     """
     try:
-        # Add to history
-        alerts_history.insert(0, alert_data)  # Insert at beginning
-        
-        # Keep only last MAX_ALERTS
-        if len(alerts_history) > MAX_ALERTS:
-            alerts_history[:] = alerts_history[:MAX_ALERTS]
-        
-        # Broadcast to all clients
-        socketio.emit('alert', alert_data, broadcast=True)
-        logger.info(f"📡 Broadcasted alert: {alert_data.get('loại')} on {alert_data.get('khung')}")
+        # Save alert to database
+        saved_alert = db.add_alert(alert_data)
+        if saved_alert:
+            # Convert to dict format for broadcasting
+            alert_dict = saved_alert.to_dict()
+            
+            # Broadcast to all clients
+            socketio.emit('alert', alert_dict, broadcast=True)
+            logger.info(f"📡 Broadcasted alert: {alert_data.get('loại')} on {alert_data.get('khung')} - Saved to DB with ID {saved_alert.id}")
+        else:
+            # Fallback: broadcast original data even if DB save failed
+            socketio.emit('alert', alert_data, broadcast=True)
+            logger.warning(f"📡 Broadcasted alert without DB save: {alert_data.get('loại')} on {alert_data.get('khung')}")
     
     except Exception as e:
         logger.error(f"Error broadcasting alert: {e}")
+        # Try to broadcast anyway
+        try:
+            socketio.emit('alert', alert_data, broadcast=True)
+        except Exception as e2:
+            logger.error(f"Failed to broadcast alert at all: {e2}")
 
 
 def run_flask_app(host: str = '0.0.0.0', port: int = 5000, debug: bool = False):
@@ -109,8 +209,36 @@ def start_flask_background(host: str = '0.0.0.0', port: int = 5000, debug: bool 
     return thread
 
 
+def cleanup_database():
+    """Cleanup old alerts from database"""
+    try:
+        archived_count = db.cleanup_old_alerts(days_to_keep=30)
+        logger.info(f"Database cleanup: archived {archived_count} old alerts")
+        return archived_count
+    except Exception as e:
+        logger.error(f"Database cleanup failed: {e}")
+        return 0
+
+
+def shutdown_database():
+    """Gracefully shutdown database connections"""
+    try:
+        db.close()
+        logger.info("Database connections closed")
+    except Exception as e:
+        logger.error(f"Error closing database: {e}")
+
+
+# Cleanup handler for graceful shutdown
+import atexit
+atexit.register(shutdown_database)
+
+
 # Export for use in main.py
-__all__ = ['app', 'socketio', 'broadcast_alert', 'run_flask_app', 'start_flask_background']
+__all__ = [
+    'app', 'socketio', 'broadcast_alert', 'run_flask_app', 'start_flask_background',
+    'cleanup_database', 'shutdown_database', 'db'
+]
 
 
 if __name__ == '__main__':
@@ -119,4 +247,13 @@ if __name__ == '__main__':
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     
+    # Test database connection
+    try:
+        stats = db.get_alert_stats()
+        logger.info(f"Database connected successfully. Total alerts: {stats.get('total_alerts', 0)}")
+    except Exception as e:
+        logger.error(f"Database connection failed: {e}")
+        exit(1)
+    
+    # Run flask app
     run_flask_app(debug=True)

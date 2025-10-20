@@ -4,6 +4,7 @@ Main application - Coordinates multi-timeframe watchers, detection, and alert br
 import asyncio
 import logging
 import sys
+import random
 from datetime import datetime
 from typing import Dict
 
@@ -96,43 +97,56 @@ class ChochAlertSystem:
         
         logger.info("[OK] System initialized")
 
-    async def on_new_data(self, symbol: str, timeframe: str, df: pd.DataFrame, is_new_bar: bool):
+    async def on_new_data(self, symbol: str, timeframe: str, df: pd.DataFrame, has_enough_bars: bool):
         """
-        Callback when new data is received for a timeframe
+        Process CHoCH detection với 3-CANDLE CONFIRMATION (CLOSED CANDLES ONLY)
+        
+        Logic 3 nến:
+        - Pre-CHoCH: df.index[-3] (nến thứ 3 từ cuối)  
+        - CHoCH: df.index[-2] (nến thứ 2 từ cuối)
+        - Confirmation: df.index[-1] (nến cuối cùng)
         
         Args:
             symbol: Trading symbol (e.g., 'BTCUSDT')
-            timeframe: Timeframe identifier
-            df: 50 bars dataframe (pivot đã được rebuild ở monitor_loop)
-            is_new_bar: Always True in realtime mode
+            timeframe: Timeframe identifier  
+            df: DataFrame với CLOSED bars only (≥ 3 bars cho confirmation)
+            has_enough_bars: True nếu có đủ ≥ 3 bars cho 3-candle logic
         
         Returns:
-            True if CHoCH signal detected, False otherwise
+            True if CHoCH signal detected and confirmed, False otherwise
         """
         key = f"{symbol}_{timeframe}"
         
         try:
-            # ⬇️ DETECT CHoCH TRÊN BAR CUỐI - Pivot đã rebuild ở monitor_loop
-            # Chỉ check CHoCH signal trên bar cuối
+            # ⬇️ VALIDATE: Cần đủ bars cho 3-candle confirmation
+            if not has_enough_bars or len(df) < 3:
+                logger.debug(f"[{symbol}][{timeframe}] Insufficient bars for 3-candle confirmation ({len(df)} bars)")
+                return False
+                
+            # ⬇️ GET STATE - Pivot đã rebuild ở monitor_loop
             state = self.detector.states.get(key)
-            
             if state is None:
-                logger.warning(f"[{symbol}][{timeframe}] No state found")
+                logger.warning(f"[{symbol}][{timeframe}] No detector state found")
                 return False
             
-            # ⬇️ DETECT TRÊN BAR CUỐI - dùng state từ rebuild_pivots
+            # ⬇️ CHoCH DETECTION với 3-CANDLE CONFIRMATION
+            # process_new_bar sẽ check:
+            # - Pre-CHoCH: df.index[-3] 
+            # - CHoCH: df.index[-2]
+            # - Confirmation: df.index[-1]
             result = self.detector.process_new_bar(key, df)
             
-            logger.debug(f"[{symbol}][{timeframe}] Detection: choch_up={result.get('choch_up')}, choch_down={result.get('choch_down')}")
+            logger.debug(f"[{symbol}][{timeframe}] 3-Candle Detection: choch_up={result.get('choch_up')}, choch_down={result.get('choch_down')}")
             
             if result.get('choch_up') or result.get('choch_down'):
-                # CHoCH detected on second-to-last bar (closed candle)
-                closed_bar_idx = df.index[-2] if len(df) >= 2 else df.index[-1]
-                closed_bar_price = df['close'].iloc[-2] if len(df) >= 2 else df['close'].iloc[-1]
+                # ✅ CHoCH CONFIRMED với 3 NẾN ĐÃ ĐÓNG
+                confirmation_idx = df.index[-1]  # Confirmation candle (cuối cùng)
+                choch_idx = df.index[-2]  # CHoCH candle (thứ 2 từ cuối)
+                pre_choch_idx = df.index[-3]  # Pre-CHoCH candle (thứ 3 từ cuối)
                 
-                logger.info(f"[SIGNAL] 🎯 CHoCH detected on {symbol} {timeframe}: {result.get('signal_type')}")
-                logger.info(f"[{symbol}][{timeframe}] CLOSED Bar: {closed_bar_idx} | Close: {closed_bar_price:.8f}")
-                logger.info(f"[{symbol}][{timeframe}] Latest Bar: {df.index[-1]} | Close: {df['close'].iloc[-1]:.8f} (may still be open)")
+                logger.info(f"[SIGNAL] 🎯 CHoCH CONFIRMED on {symbol} {timeframe}: {result.get('signal_type')} (3-CANDLE LOGIC)")
+                logger.info(f"[{symbol}][{timeframe}] Pre-CHoCH: {pre_choch_idx} | CHoCH: {choch_idx} | Confirm: {confirmation_idx}")
+                logger.info(f"[{symbol}][{timeframe}] CHoCH Price: {result.get('price'):.8f} | CHoCH Time: {result.get('timestamp')}")
                 
                 # Get pivot data for visualization
                 pivots = []
@@ -147,8 +161,8 @@ class ChochAlertSystem:
                 # CHoCH info
                 choch_info = {
                     'type': result.get('signal_type', 'CHoCH'),
-                    'price': result.get('price', df['close'].iloc[-1]),
-                    'timestamp': result.get('timestamp', df.index[-1])
+                    'price': result.get('price', df['close'].iloc[-2]),  # CHoCH price (nến thứ 2 từ cuối)
+                    'timestamp': result.get('timestamp', choch_idx)  # CHoCH timestamp
                 }
                 
                 # Generate chart if enabled
@@ -176,14 +190,14 @@ class ChochAlertSystem:
                     except Exception as e:
                         logger.error(f"Error generating visualization: {e}")
                 
-                # Create alert data
+                # Create alert data với CHoCH timing (không phải thời gian hiện tại)
                 alert_data = create_alert_data(
                     symbol=symbol,
                     timeframe=timeframe,
                     signal_type=result.get('signal_type', 'CHoCH'),
                     direction=result.get('direction', 'Long'),
-                    price=result.get('price', df['close'].iloc[-1]),
-                    timestamp=result.get('timestamp', df.index[-1])
+                    price=result.get('price', df['close'].iloc[-2]),  # CHoCH price
+                    timestamp=result.get('timestamp', choch_idx)  # CHoCH candle time (not current time)
                 )
                 
                 # Add TradingView link to alert
@@ -373,33 +387,19 @@ class ChochAlertSystem:
         # Initialize fetcher
         await self.fetcher.initialize()
         
-        # Get symbols to monitor
-        symbols_to_monitor = config.get_symbols_list()
-        
-        if symbols_to_monitor == 'ALL':
-            logger.info(f"Fetching all futures from Binance with {config.QUOTE_CURRENCY} pairs...")
-            symbols_list = await self.fetcher.get_all_usdt_pairs(
-                min_volume_24h=config.MIN_VOLUME_24H,
-                quote=config.QUOTE_CURRENCY
-            )
-            logger.info(f"Found {len(symbols_list)} futures to monitor")
-        else:
-            symbols_list = [s.replace('/', '') for s in symbols_to_monitor]
-            logger.info(f"Monitoring {len(symbols_list)} specified futures: {', '.join(symbols_list)}")
-        
         logger.info(f"Timeframes: {', '.join(config.TIMEFRAMES)}")
         logger.info(f"Pivot Settings: Left={config.PIVOT_LEFT}, Right={config.PIVOT_RIGHT}")
         logger.info(f"Historical Bars: {config.HISTORICAL_LIMIT}")
         logger.info(f"Variant Filter: {config.USE_VARIANT_FILTER}")
-        logger.info(f"Total symbols: {len(symbols_list)}")
         logger.info("=" * 80)
         
         try:
             # Start sequential monitoring loop
-            logger.info("[OK] Starting sequential monitoring loop...")
+            logger.info("[OK] Starting sequential monitoring loop with dynamic symbol fetching...")
+            logger.info("Each scan will fetch symbols and randomly select 100 for processing")
             logger.info("Press Ctrl+C to stop")
             
-            await self.monitor_loop(symbols_list)
+            await self.monitor_loop()
         
         except KeyboardInterrupt:
             logger.info("\n[STOP] Shutdown signal received...")
@@ -408,10 +408,10 @@ class ChochAlertSystem:
         finally:
             await self.stop()
     
-    async def monitor_loop(self, symbols: list):
+    async def monitor_loop(self):
         """
-        Sequential monitoring loop with per-timeframe scheduling.
-        Each timeframe is scanned only when its interval has passed.
+        Sequential monitoring loop with per-timeframe scheduling and dynamic symbol fetching.
+        Each scan will fetch fresh symbol list and randomly select 100 symbols to process.
         """
         loop_count = 0
         
@@ -427,28 +427,59 @@ class ChochAlertSystem:
                 await asyncio.sleep(1)
                 continue
             
+            # ⬇️ FETCH SYMBOLS DYNAMICALLY FOR EACH SCAN
+            try:
+                symbols_to_monitor = config.get_symbols_list()
+                
+                if symbols_to_monitor == 'ALL':
+                    logger.info(f"[Loop #{loop_count}] Fetching fresh symbol list from Binance...")
+                    all_symbols = await self.fetcher.get_all_usdt_pairs(
+                        min_volume_24h=config.MIN_VOLUME_24H,
+                        quote=config.QUOTE_CURRENCY
+                    )
+                    
+                    # ⬇️ RANDOM SELECT 100 SYMBOLS
+                    if len(all_symbols) > 100:
+                        selected_symbols = random.sample(all_symbols, 100)
+                        logger.info(f"[Loop #{loop_count}] Randomly selected 100 symbols from {len(all_symbols)} available")
+                        # Show first 10 selected symbols for reference
+                        sample_symbols = selected_symbols[:10]
+                        logger.info(f"[Loop #{loop_count}] Sample selected: {', '.join(sample_symbols)}... (+{len(selected_symbols)-10} more)")
+                    else:
+                        selected_symbols = all_symbols
+                        logger.info(f"[Loop #{loop_count}] Using all {len(all_symbols)} symbols (less than 100)")
+                else:
+                    # Use specified symbols (no randomization)
+                    selected_symbols = [s.replace('/', '') for s in symbols_to_monitor]
+                    logger.info(f"[Loop #{loop_count}] Using {len(selected_symbols)} specified symbols")
+                
+            except Exception as e:
+                logger.error(f"[Loop #{loop_count}] Error fetching symbols: {e}")
+                await asyncio.sleep(10)  # Wait before retry
+                continue
+            
             logger.info(f"\n{'='*60}")
             logger.info(f"Loop #{loop_count} - Scanning: {', '.join(scannable_timeframes)}")
-            logger.info(f"Processing {len(symbols)} symbols × {len(scannable_timeframes)} timeframes")
+            logger.info(f"Processing {len(selected_symbols)} symbols × {len(scannable_timeframes)} timeframes")
             logger.info(f"{'='*60}")
             
             processed_count = 0
             signal_count = 0
             
-            # Process each symbol sequentially
-            for symbol in symbols:
+            # Process each selected symbol sequentially
+            for symbol in selected_symbols:
                 if not self.running:
                     break
                 
                 # Process only scannable timeframes for this symbol
                 for timeframe in scannable_timeframes:
                     try:
-                        # ⬇️ FETCH 50 BARS
-                        logger.info(f"[{symbol}][{timeframe}] Fetching 50 bars...")
+                        # ⬇️ FETCH CLOSED BARS ONLY (open candle excluded)
+                        logger.info(f"[{symbol}][{timeframe}] Fetching 50 CLOSED bars...")
                         df = await self.fetcher.fetch_historical(
                             symbol=symbol,
                             timeframe=timeframe,
-                            limit=50  # ⬅️ CHỈ 50 BARS
+                            limit=50  # ⬅️ 50 CLOSED BARS (open candle excluded)
                         )
                         
                         if len(df) == 0:
@@ -457,21 +488,27 @@ class ChochAlertSystem:
                         
                         key = f"{symbol}_{timeframe}"
                         
-                        # ⬇️ REBUILD PIVOT TỪ 50 BARS
-                        logger.info(f"[{symbol}][{timeframe}] Rebuilding pivots from {len(df)} bars...")
+                        # ⬇️ ALWAYS REBUILD PIVOTS from CLOSED bars (ensures accuracy)
+                        # Rebuilding từ 50 bars đảm bảo tính chính xác cao hơn incremental update
+                        logger.info(f"[{symbol}][{timeframe}] Rebuilding pivots from {len(df)} CLOSED bars...")
                         pivot_count = self.detector.rebuild_pivots(key, df)
-                        logger.info(f"[{symbol}][{timeframe}] ✓ Built {pivot_count} pivots")
+                        logger.info(f"[{symbol}][{timeframe}] ✓ Built {pivot_count} pivots from CLOSED candles")
                         
-                        # ⬇️ DETECT CHoCH TRÊN BAR CUỐI (dùng state từ rebuild_pivots)
-                        result = await self.on_new_data(symbol, timeframe, df, is_new_bar=True)
+                        # ⬇️ CHECK CHoCH với 3-CANDLE CONFIRMATION LOGIC
+                        # Cần ít nhất 3 nến: pre-CHoCH, CHoCH, confirmation
+                        if len(df) >= 3:
+                            result = await self.on_new_data(symbol, timeframe, df, has_enough_bars=True)
+                        else:
+                            logger.debug(f"[{symbol}][{timeframe}] Not enough bars for 3-candle confirmation ({len(df)} < 3)")
+                            result = False
                         
                         if result:  # Signal detected
                             signal_count += 1
                         
                         processed_count += 1
                         
-                        # ⬇️ BỎ DỮ LIỆU - KHÔNG LƯU LẠI
-                        # Lần sau fetch dữ liệu mới xử lý lại
+                        # ⬇️ 50 CLOSED BARS processed với 3-CANDLE CONFIRMATION
+                        # Lần sau fetch 50 bars mới và rebuild pivots từ đầu
                         
                         # Small delay to respect rate limits
                         await asyncio.sleep(0.1)
@@ -518,7 +555,7 @@ class ChochAlertSystem:
             
             logger.info(f"\n{'='*60}")
             logger.info(f"Loop #{loop_count} Summary:")
-            logger.info(f"  Processed: {processed_count}/{len(symbols) * len(scannable_timeframes)}")
+            logger.info(f"  Processed: {processed_count}/{len(selected_symbols) * len(scannable_timeframes)}")
             logger.info(f"  Signals detected: {signal_count}")
             logger.info(f"  Duration: {loop_duration:.1f}s")
             logger.info(f"  Next scan at: {next_scan_str} ({actual_wait:.0f}s)")

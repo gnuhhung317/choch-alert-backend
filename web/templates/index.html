@@ -178,6 +178,160 @@
             width: 3rem;
             height: 3rem;
         }
+        
+        /* Filter section styles */
+        .filter-container {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+        
+        .filter-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .filter-header h3 {
+            margin: 0;
+            color: #333;
+            font-weight: 600;
+        }
+        
+        .filter-toggle {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .filter-toggle:hover {
+            background: #5a67d8;
+            transform: translateY(-1px);
+        }
+        
+        .filter-content {
+            display: none;
+        }
+        
+        .filter-content.show {
+            display: block;
+        }
+        
+        .filter-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .filter-group label {
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+        
+        .filter-group select {
+            padding: 10px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            background: white;
+            font-size: 14px;
+            color: #333;
+            transition: border-color 0.3s ease;
+        }
+        
+        .filter-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .filter-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        
+        .filter-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .filter-btn.apply {
+            background: #10b981;
+            color: white;
+        }
+        
+        .filter-btn.apply:hover {
+            background: #059669;
+        }
+        
+        .filter-btn.clear {
+            background: #f3f4f6;
+            color: #374151;
+        }
+        
+        .filter-btn.clear:hover {
+            background: #e5e7eb;
+        }
+        
+        .active-filters {
+            margin-top: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        
+        .filter-tag {
+            background: #667eea;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .filter-tag .remove {
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+        }
+        
+        .filter-tag .remove:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        .filtered-count {
+            color: #667eea;
+            font-weight: 600;
+            margin-left: 10px;
+        }
     </style>
 </head>
 <body>
@@ -197,13 +351,93 @@
             </div>
         </div>
         
+        <!-- Filter Section -->
+        <div class="filter-container">
+            <div class="filter-header">
+                <h3><i class="fas fa-filter"></i> Filters</h3>
+                <button class="filter-toggle" onclick="toggleFilters()">
+                    <i class="fas fa-sliders-h"></i> Toggle Filters
+                </button>
+            </div>
+            
+            <div class="filter-content" id="filterContent">
+                <div class="filter-row">
+                    <div class="filter-group">
+                        <label for="symbolFilter">
+                            <i class="fas fa-coins"></i> Symbol
+                        </label>
+                        <select id="symbolFilter" multiple>
+                            <option value="">All Symbols</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label for="timeframeFilter">
+                            <i class="fas fa-clock"></i> Timeframe
+                        </label>
+                        <select id="timeframeFilter" multiple>
+                            <option value="">All Timeframes</option>
+                            <option value="1m">1m</option>
+                            <option value="3m">3m</option>
+                            <option value="5m">5m</option>
+                            <option value="15m">15m</option>
+                            <option value="30m">30m</option>
+                            <option value="1h">1h</option>
+                            <option value="2h">2h</option>
+                            <option value="4h">4h</option>
+                            <option value="6h">6h</option>
+                            <option value="8h">8h</option>
+                            <option value="12h">12h</option>
+                            <option value="1d">1d</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label for="directionFilter">
+                            <i class="fas fa-arrow-trend-up"></i> Direction
+                        </label>
+                        <select id="directionFilter" multiple>
+                            <option value="">All Directions</option>
+                            <option value="Long">Long</option>
+                            <option value="Short">Short</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label for="signalFilter">
+                            <i class="fas fa-tag"></i> Signal Type
+                        </label>
+                        <select id="signalFilter" multiple>
+                            <option value="">All Signals</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="filter-actions">
+                    <button class="filter-btn clear" onclick="clearFilters()">
+                        <i class="fas fa-times"></i> Clear All
+                    </button>
+                    <button class="filter-btn apply" onclick="applyFilters()">
+                        <i class="fas fa-check"></i> Apply Filters
+                    </button>
+                </div>
+                
+                <div class="active-filters" id="activeFilters"></div>
+            </div>
+        </div>
+        
         <!-- Alerts Table -->
         <div class="alerts-table-container">
             <div class="table-header">
                 <h2><i class="fas fa-bell"></i> Recent Alerts</h2>
-                <span class="alert-count">
-                    <i class="fas fa-hashtag"></i> <span id="alertCount">0</span> alerts
-                </span>
+                <div>
+                    <span class="alert-count">
+                        <i class="fas fa-hashtag"></i> <span id="alertCount">0</span> alerts
+                    </span>
+                    <span class="filtered-count" id="filteredCount" style="display: none;">
+                        (<span id="filteredNumber">0</span> filtered)
+                    </span>
+                </div>
             </div>
             
             <div class="table-responsive">

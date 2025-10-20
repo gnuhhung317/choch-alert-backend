@@ -112,7 +112,7 @@ class BinanceFetcher:
     
     async def fetch_historical(self, symbol: str, timeframe: str, limit: int = 500) -> pd.DataFrame:
         """
-        Fetch historical OHLCV data
+        Fetch historical OHLCV data (CLOSED CANDLES ONLY)
         
         Args:
             symbol: Trading pair in Binance Futures format (e.g., 'BTCUSDT')
@@ -120,7 +120,7 @@ class BinanceFetcher:
             limit: Number of candles to fetch
         
         Returns:
-            DataFrame with columns: timestamp, open, high, low, close, volume
+            DataFrame with CLOSED candles only, excluding the currently forming candle
         """
         if not self.exchange:
             await self.initialize()
@@ -129,7 +129,9 @@ class BinanceFetcher:
             # Convert BTCUSDT to BTC/USDT:USDT for CCXT futures
             ccxt_symbol = self._convert_to_ccxt_format(symbol)
             
-            ohlcv = await self.exchange.fetch_ohlcv(ccxt_symbol, timeframe, limit=limit)
+            # Fetch one extra candle to account for the currently forming candle
+            fetch_limit = limit + 1
+            ohlcv = await self.exchange.fetch_ohlcv(ccxt_symbol, timeframe, limit=fetch_limit)
             
             df = pd.DataFrame(
                 ohlcv,
@@ -140,7 +142,16 @@ class BinanceFetcher:
             df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
             df.set_index('timestamp', inplace=True)
             
-            logger.info(f"Fetched {len(df)} bars for {symbol} {timeframe}")
+            # ⚠️ CRITICAL FIX: Remove the last candle (currently forming/open candle)
+            # Only return CLOSED candles to ensure CHoCH confirmation accuracy
+            if len(df) > 0:
+                df = df.iloc[:-1]  # Remove last candle (open/forming candle)
+            
+            # Ensure we don't return more than requested limit
+            if len(df) > limit:
+                df = df.tail(limit)
+            
+            logger.info(f"Fetched {len(df)} CLOSED bars for {symbol} {timeframe} (excluded open candle)")
             return df
         
         except Exception as e:

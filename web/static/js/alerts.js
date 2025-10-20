@@ -13,6 +13,25 @@ const alertCount = document.getElementById('alertCount');
 // Alert counter
 let totalAlerts = 0;
 
+// All alerts data (unfiltered)
+let allAlerts = [];
+
+// Current filters
+let currentFilters = {
+    symbols: [],
+    timeframes: [],
+    directions: [],
+    signals: []
+};
+
+// Unique values for filter options
+let uniqueValues = {
+    symbols: new Set(),
+    timeframes: new Set(),
+    directions: new Set(),
+    signals: new Set()
+};
+
 // Request notification permission on page load
 if ('Notification' in window && Notification.permission === 'default') {
     Notification.requestPermission();
@@ -41,15 +60,25 @@ socket.on('disconnect', () => {
 socket.on('alerts_history', (alerts) => {
     console.log(`📊 Received ${alerts.length} alerts from history`);
     
+    // Store all alerts
+    allAlerts = [...alerts];
+    
     // Clear loading message
     alertsTableBody.innerHTML = '';
     
     if (alerts.length === 0) {
         showNoAlerts();
     } else {
-        alerts.forEach(alert => addAlertToTable(alert, false));
+        // Update filter options with new data
+        updateFilterOptions(alerts);
+        
+        // Apply current filters
+        const filteredAlerts = applyCurrentFilters(alerts);
+        
+        // Display filtered alerts
+        filteredAlerts.forEach(alert => addAlertToTable(alert, false));
         totalAlerts = alerts.length;
-        updateAlertCount();
+        updateAlertCount(filteredAlerts.length);
     }
 });
 
@@ -57,20 +86,35 @@ socket.on('alerts_history', (alerts) => {
 socket.on('alert', (data) => {
     console.log('🚨 New alert received:', data);
     
-    // Remove "no alerts" message if exists
-    if (alertsTableBody.querySelector('.no-alerts')) {
-        alertsTableBody.innerHTML = '';
+    // Add to all alerts array
+    allAlerts.unshift(data);
+    
+    // Keep only last 100 alerts
+    if (allAlerts.length > 100) {
+        allAlerts = allAlerts.slice(0, 100);
     }
     
-    // Add to table with animation
-    addAlertToTable(data, true);
+    // Update filter options
+    updateFilterOptions([data]);
+    
+    // Check if alert passes current filters
+    if (alertPassesFilters(data)) {
+        // Remove "no alerts" message if exists
+        if (alertsTableBody.querySelector('.no-alerts')) {
+            alertsTableBody.innerHTML = '';
+        }
+        
+        // Add to table with animation
+        addAlertToTable(data, true);
+        
+        // Show browser notification
+        showNotification(data);
+    }
     
     // Update counter
     totalAlerts++;
-    updateAlertCount();
-    
-    // Show browser notification
-    showNotification(data);
+    const filteredAlerts = applyCurrentFilters(allAlerts);
+    updateAlertCount(filteredAlerts.length);
     
     // Play sound (optional)
     // playAlertSound();
@@ -109,7 +153,7 @@ function addAlertToTable(alert, animate = true) {
         <td><span class="${directionClass}">${alert.hướng}</span></td>
         <td>${alert.loại}</td>
         <td>${price}</td>
-        <td><a href="${alert.link}" target="_blank" class="tradingview-link">
+        <td><a href="${alert.tradingview_link}" target="_blank" class="tradingview-link">
             <i class="fas fa-external-link-alt"></i> View Chart
         </a></td>
     `;
@@ -134,8 +178,15 @@ function showNoAlerts() {
     `;
 }
 
-function updateAlertCount() {
+function updateAlertCount(filteredCount = null) {
     alertCount.textContent = totalAlerts;
+    
+    if (filteredCount !== null && filteredCount !== totalAlerts) {
+        document.getElementById('filteredCount').style.display = 'inline';
+        document.getElementById('filteredNumber').textContent = filteredCount;
+    } else {
+        document.getElementById('filteredCount').style.display = 'none';
+    }
 }
 
 function showNotification(alert) {
@@ -156,7 +207,7 @@ function showNotification(alert) {
         
         // Open TradingView on click
         notification.onclick = () => {
-            window.open(alert.link, '_blank');
+            window.open(alert.tradingview_link, '_blank');
             notification.close();
         };
     }
@@ -179,3 +230,187 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log(`📢 Notification permission: ${Notification.permission}`);
     }
 });
+
+/**
+ * Filter Functions
+ */
+
+function toggleFilters() {
+    const filterContent = document.getElementById('filterContent');
+    filterContent.classList.toggle('show');
+}
+
+function updateFilterOptions(newAlerts) {
+    // Add new values to unique sets
+    newAlerts.forEach(alert => {
+        uniqueValues.symbols.add(alert.mã || alert.symbol);
+        uniqueValues.timeframes.add(alert.khung);
+        uniqueValues.directions.add(alert.hướng);
+        uniqueValues.signals.add(alert.loại);
+    });
+    
+    // Update symbol dropdown
+    updateSelectOptions('symbolFilter', Array.from(uniqueValues.symbols).sort());
+    
+    // Update signal dropdown
+    updateSelectOptions('signalFilter', Array.from(uniqueValues.signals).sort());
+}
+
+function updateSelectOptions(selectId, options) {
+    const select = document.getElementById(selectId);
+    const currentOptions = Array.from(select.options).map(option => option.value);
+    
+    options.forEach(value => {
+        if (value && !currentOptions.includes(value)) {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = value;
+            select.appendChild(option);
+        }
+    });
+}
+
+function applyCurrentFilters(alerts) {
+    return alerts.filter(alert => alertPassesFilters(alert));
+}
+
+function alertPassesFilters(alert) {
+    // Check symbol filter
+    if (currentFilters.symbols.length > 0) {
+        const symbol = alert.mã || alert.symbol;
+        if (!currentFilters.symbols.includes(symbol)) {
+            return false;
+        }
+    }
+    
+    // Check timeframe filter
+    if (currentFilters.timeframes.length > 0) {
+        if (!currentFilters.timeframes.includes(alert.khung)) {
+            return false;
+        }
+    }
+    
+    // Check direction filter
+    if (currentFilters.directions.length > 0) {
+        if (!currentFilters.directions.includes(alert.hướng)) {
+            return false;
+        }
+    }
+    
+    // Check signal filter
+    if (currentFilters.signals.length > 0) {
+        if (!currentFilters.signals.includes(alert.loại)) {
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+function applyFilters() {
+    // Get selected values from each filter
+    currentFilters.symbols = getSelectedValues('symbolFilter');
+    currentFilters.timeframes = getSelectedValues('timeframeFilter');
+    currentFilters.directions = getSelectedValues('directionFilter');
+    currentFilters.signals = getSelectedValues('signalFilter');
+    
+    // Apply filters to all alerts
+    const filteredAlerts = applyCurrentFilters(allAlerts);
+    
+    // Clear table and display filtered alerts
+    alertsTableBody.innerHTML = '';
+    
+    if (filteredAlerts.length === 0) {
+        showNoAlerts();
+    } else {
+        filteredAlerts.forEach(alert => addAlertToTable(alert, false));
+    }
+    
+    // Update alert count
+    updateAlertCount(filteredAlerts.length);
+    
+    // Update active filters display
+    updateActiveFiltersDisplay();
+    
+    console.log(`🔍 Applied filters: ${filteredAlerts.length}/${allAlerts.length} alerts shown`);
+}
+
+function clearFilters() {
+    // Reset all filters
+    currentFilters = {
+        symbols: [],
+        timeframes: [],
+        directions: [],
+        signals: []
+    };
+    
+    // Clear all select values
+    ['symbolFilter', 'timeframeFilter', 'directionFilter', 'signalFilter'].forEach(id => {
+        const select = document.getElementById(id);
+        Array.from(select.options).forEach(option => option.selected = false);
+    });
+    
+    // Show all alerts
+    alertsTableBody.innerHTML = '';
+    allAlerts.forEach(alert => addAlertToTable(alert, false));
+    
+    // Update alert count
+    updateAlertCount();
+    
+    // Clear active filters display
+    updateActiveFiltersDisplay();
+    
+    console.log('🗑️ Cleared all filters');
+}
+
+function getSelectedValues(selectId) {
+    const select = document.getElementById(selectId);
+    return Array.from(select.selectedOptions)
+        .map(option => option.value)
+        .filter(value => value !== '');
+}
+
+function updateActiveFiltersDisplay() {
+    const activeFiltersContainer = document.getElementById('activeFilters');
+    activeFiltersContainer.innerHTML = '';
+    
+    const filterTypes = [
+        { key: 'symbols', label: 'Symbol', icon: 'fas fa-coins' },
+        { key: 'timeframes', label: 'Timeframe', icon: 'fas fa-clock' },
+        { key: 'directions', label: 'Direction', icon: 'fas fa-arrow-trend-up' },
+        { key: 'signals', label: 'Signal', icon: 'fas fa-tag' }
+    ];
+    
+    filterTypes.forEach(filterType => {
+        const values = currentFilters[filterType.key];
+        if (values.length > 0) {
+            values.forEach(value => {
+                const tag = document.createElement('div');
+                tag.className = 'filter-tag';
+                tag.innerHTML = `
+                    <i class="${filterType.icon}"></i>
+                    ${filterType.label}: ${value}
+                    <span class="remove" onclick="removeFilter('${filterType.key}', '${value}')">×</span>
+                `;
+                activeFiltersContainer.appendChild(tag);
+            });
+        }
+    });
+}
+
+function removeFilter(filterType, value) {
+    // Remove value from filter
+    currentFilters[filterType] = currentFilters[filterType].filter(v => v !== value);
+    
+    // Update select element
+    const selectId = filterType.replace('s', '') + 'Filter'; // symbols -> symbolFilter
+    const select = document.getElementById(selectId);
+    Array.from(select.options).forEach(option => {
+        if (option.value === value) {
+            option.selected = false;
+        }
+    });
+    
+    // Reapply filters
+    applyFilters();
+}
