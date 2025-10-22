@@ -27,10 +27,10 @@ class TimeframeState:
         # State variables
         self.last_pivot_bar: Optional[int] = None
         self.last_pivot_price: Optional[float] = None
-        self.last_six_up = False
-        self.last_six_down = False
-        self.last_six_bar_idx: Optional[int] = None
-        self.pivot4: Optional[float] = None
+        self.last_eight_up = False
+        self.last_eight_down = False
+        self.last_eight_bar_idx: Optional[int] = None
+        self.pivot6: Optional[float] = None  # Changed from pivot4 to pivot6 for 8-pivot pattern
         self.choch_locked = False
         self.choch_bar_idx: Optional[int] = None  # Bar where CHoCH triggered
         self.choch_price: Optional[float] = None  # Price where CHoCH triggered
@@ -56,10 +56,10 @@ class TimeframeState:
 
         self.last_pivot_bar = None
         self.last_pivot_price = None
-        self.last_six_up = False
-        self.last_six_down = False
-        self.last_six_bar_idx = None
-        self.pivot4 = None
+        self.last_eight_up = False
+        self.last_eight_down = False
+        self.last_eight_bar_idx = None
+        self.pivot6 = None
         self.choch_locked = False
         self.choch_bar_idx = None
         self.choch_price = None
@@ -289,63 +289,93 @@ class ChochDetector:
         
         return False
     
-    def check_six_pattern(self, state: TimeframeState, df: pd.DataFrame) -> bool:
+    def check_eight_pattern(self, state: TimeframeState, df: pd.DataFrame) -> bool:
         """
-        Check for valid 6-pivot pattern
+        Check for valid 8-pivot pattern
         Returns True if pattern is valid and updates state
         """
-        if state.pivot_count() < 6:
+        if state.pivot_count() < 8:
             return False
         
-        # Get last 6 pivots
-        b6, p6, h6 = state.get_pivot_from_end(0)
-        b5, p5, h5 = state.get_pivot_from_end(1)
-        b4, p4, h4 = state.get_pivot_from_end(2)
-        b3, p3, h3 = state.get_pivot_from_end(3)
-        b2, p2, h2 = state.get_pivot_from_end(4)
-        b1, p1, h1 = state.get_pivot_from_end(5)
+        # Get last 8 pivots
+        b8, p8, h8 = state.get_pivot_from_end(0)
+        b7, p7, h7 = state.get_pivot_from_end(1)
+        b6, p6, h6 = state.get_pivot_from_end(2)
+        b5, p5, h5 = state.get_pivot_from_end(3)
+        b4, p4, h4 = state.get_pivot_from_end(4)
+        b3, p3, h3 = state.get_pivot_from_end(5)
+        b2, p2, h2 = state.get_pivot_from_end(6)
+        b1, p1, h1 = state.get_pivot_from_end(7)
         
-        # Check alternating structure
-        up_struct = (not h1) and h2 and (not h3) and h4 and (not h5) and h6
-        down_struct = h1 and (not h2) and h3 and (not h4) and h5 and (not h6)
+        # Check alternating structure for 8 pivots
+        up_struct = (not h1) and h2 and (not h3) and h4 and (not h5) and h6 and (not h7) and h8
+        down_struct = h1 and (not h2) and h3 and (not h4) and h5 and (not h6) and h7 and (not h8)
         
         if not (up_struct or down_struct):
             return False
         
-        # Check P5 retest P2
+        # Check P7 retest P4 (for 8-pivot pattern)
         try:
-            hi5 = df.loc[b5, 'high']
-            lo5 = df.loc[b5, 'low']
-            hi2 = df.loc[b2, 'high']
-            lo2 = df.loc[b2, 'low']
+            hi7 = df.loc[b7, 'high']
+            lo7 = df.loc[b7, 'low']
+            hi4 = df.loc[b4, 'high']
+            lo4 = df.loc[b4, 'low']
             
-            touch_retest = (up_struct and (lo5 < hi2)) or (down_struct and (hi5 > lo2))
+            touch_retest = (up_struct and (lo7 < hi4)) or (down_struct and (hi7 > lo4))
             
             if not touch_retest:
                 return False
         except KeyError:
             return False
         
-        # Check P6 is extreme
-        all_prices = [p1, p2, p3, p4, p5, p6]
-        is_highest6 = p6 == max(all_prices)
-        is_lowest6 = p6 == min(all_prices)
+        # Check P8 is extreme
+        all_prices = [p1, p2, p3, p4, p5, p6, p7, p8]
+        is_highest8 = p8 == max(all_prices)
+        is_lowest8 = p8 == min(all_prices)
         
-        # Check order constraints
-        up_order_ok = (p2 < p4 < p6) and (p1 < p3 < p5)
-        down_order_ok = (p1 > p3 > p5) and (p2 > p4 > p6)
+        # Check order constraints for 8-pivot pattern
+        up_order_ok = (p2 < p4 < p6 < p8) and (p1 < p3 < p5 < p7)
+        down_order_ok = (p1 > p3 > p5 > p7) and (p2 > p4 > p6 > p8)
+        
+        # Additional breakout conditions for 8-pivot pattern
+        try:
+            # For uptrend: low[5] > high[2] and low[3] > low[1]
+            lo5 = df.loc[b5, 'low']
+            hi2 = df.loc[b2, 'high']
+            lo3 = df.loc[b3, 'low']
+            lo1 = df.loc[b1, 'low']
+            
+            # For downtrend: high[5] < low[2] and high[3] < high[1]
+            hi5 = df.loc[b5, 'high']
+            lo2 = df.loc[b2, 'low']
+            hi3 = df.loc[b3, 'high']
+            hi1 = df.loc[b1, 'high']
+            
+            up_breakout = (lo5 > hi2) and (lo3 > lo1)
+            down_breakout = (hi5 < lo2) and (hi3 < hi1)
+            
+        except KeyError:
+            up_breakout = False
+            down_breakout = False
         
         # Validate pattern
-        old_six_up = state.last_six_up
-        old_six_down = state.last_six_down
+        old_eight_up = state.last_eight_up
+        old_eight_down = state.last_eight_down
         
-        state.last_six_up = up_struct and up_order_ok and touch_retest and is_highest6
-        state.last_six_down = down_struct and down_order_ok and touch_retest and is_lowest6
+        state.last_eight_up = up_struct and up_order_ok and touch_retest and is_highest8 and up_breakout
+        state.last_eight_down = down_struct and down_order_ok and touch_retest and is_lowest8 and down_breakout
         
-        if state.last_six_up or state.last_six_down:
-            state.pivot4 = p4
-            state.last_six_bar_idx = b6
-            logger.info(f"[6-PIVOT] ✓✓✓ VALID: {'UPTREND' if state.last_six_up else 'DOWNTREND'} - P1:{p1:.6f}(L) -> P2:{p2:.6f}(H) -> P3:{p3:.6f}(L) -> P4:{p4:.6f}(H) -> P5:{p5:.6f}(L) -> P6:{p6:.6f}(H)")
+        if state.last_eight_up or state.last_eight_down:
+            state.pivot6 = p6  # Reference pivot for CHoCH (was p4 in 6-pivot pattern)
+            state.last_eight_bar_idx = b8
+            
+            if state.last_eight_up:
+                logger.info(f"[8-PIVOT] ✓✓✓ VALID UPTREND: P1:{p1:.6f}(L) -> P2:{p2:.6f}(H) -> P3:{p3:.6f}(L) -> P4:{p4:.6f}(H) -> P5:{p5:.6f}(L) -> P6:{p6:.6f}(H) -> P7:{p7:.6f}(L-retest P4) -> P8:{p8:.6f}(H)")
+                logger.info(f"   Breakout: low[5]({lo5:.6f}) > high[2]({hi2:.6f}) = {lo5 > hi2}, low[3]({lo3:.6f}) > low[1]({lo1:.6f}) = {lo3 > lo1}")
+            else:
+                logger.info(f"[8-PIVOT] ✓✓✓ VALID DOWNTREND: P1:{p1:.6f}(H) -> P2:{p2:.6f}(L) -> P3:{p3:.6f}(H) -> P4:{p4:.6f}(L) -> P5:{p5:.6f}(H) -> P6:{p6:.6f}(L) -> P7:{p7:.6f}(H-retest P4) -> P8:{p8:.6f}(L)")
+                logger.info(f"   Breakout: high[5]({hi5:.6f}) < low[2]({lo2:.6f}) = {hi5 < lo2}, high[3]({hi3:.6f}) < high[1]({hi1:.6f}) = {hi3 < hi1}")
+            
             return True
         
         return False
@@ -361,16 +391,16 @@ class ChochDetector:
         
         Returns: (fire_choch_up, fire_choch_down)
         """
-        if state.pivot_count() < 6:
+        if state.pivot_count() < 8:
             return False, False
 
-        if state.last_six_bar_idx is None:
+        if state.last_eight_bar_idx is None:
             return False, False
 
-        # Must be after six pattern
-        is_after_six = current_idx > state.last_six_bar_idx
+        # Must be after eight pattern
+        is_after_eight = current_idx > state.last_eight_bar_idx
 
-        if not is_after_six:
+        if not is_after_eight:
             return False, False
 
         # ⚠️ CRITICAL: Cần ít nhất 3 nến ĐÃ ĐÓNG cho confirmation logic
@@ -390,19 +420,19 @@ class ChochDetector:
             return False, False
 
         # CHoCH conditions on previous bar (nến CHoCH - ĐÃ ĐÓNG)
-        # CHoCH Up: low[prev] > low[pre_prev] AND close[prev] > high[pre_prev] AND close[prev] > pivot4
+        # CHoCH Up: low[prev] > low[pre_prev] AND close[prev] > high[pre_prev] AND close[prev] > pivot6
         choch_up_bar = (prev['low'] > pre_prev['low'] and 
                        prev['close'] > pre_prev['high'] and 
-                       prev['close'] > state.pivot4)
+                       prev['close'] > state.pivot6)
         
-        # CHoCH Down: high[prev] < high[pre_prev] AND close[prev] < low[pre_prev] AND close[prev] < pivot4
+        # CHoCH Down: high[prev] < high[pre_prev] AND close[prev] < low[pre_prev] AND close[prev] < pivot6
         choch_down_bar = (prev['high'] < pre_prev['high'] and 
                          prev['close'] < pre_prev['low'] and 
-                         prev['close'] < state.pivot4)
+                         prev['close'] < state.pivot6)
 
         # Match with pattern direction
-        base_up = is_after_six and state.last_six_down and choch_up_bar
-        base_down = is_after_six and state.last_six_up and choch_down_bar
+        base_up = is_after_eight and state.last_eight_down and choch_up_bar
+        base_down = is_after_eight and state.last_eight_up and choch_down_bar
 
         # Confirmation conditions (TẤT CẢ ĐỀU ĐÃ ĐÓNG):
         # CHoCH Up: current bar low > high của nến trước CHoCH (pre_prev)
@@ -489,8 +519,8 @@ class ChochDetector:
                 state.last_pivot_bar = pivot_idx
                 state.last_pivot_price = pivot_price
         
-        # Check for 6-pattern
-        self.check_six_pattern(state, df)
+        # Check for 8-pattern
+        self.check_eight_pattern(state, df)
         
         pivot_after = state.pivot_count()
         logger.info(f"[rebuild_pivots] {len(df)} bars → {total_real_pivots} real pivots → {pivot_after} total (with fakes)")

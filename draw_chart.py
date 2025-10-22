@@ -168,7 +168,7 @@ async def main():
     # Default parameters
     default_symbol = "JOEUSDT.P"
     default_timeframe = "15m"
-    default_bars = 50
+    default_bars = 20
     
     # Parse command line arguments
     if len(sys.argv) >= 2:

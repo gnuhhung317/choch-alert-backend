@@ -14,41 +14,44 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 def create_choch_confirmation_data():
-    """Tạo data với CHoCH pattern và test confirmation"""
+    """Tạo data với CHoCH pattern và test confirmation (8-pivot pattern)"""
     base_time = datetime(2025, 1, 1)
     
-    # Scenario 1: CHoCH Up với confirmation thành công
+    # Scenario: 8-pivot pattern với các điều kiện breakout
+    # P1(L) < P3(L) < P5(L) < P7(L) và P2(H) < P4(H) < P6(H) < P8(H)  
+    # Up breakout: low[5] > high[2] và low[3] > low[1]
     data = [
-        # Pre-trend bars
-        [95, 97, 94, 96],     # Bar 0
-        [96, 98, 95, 97],     # Bar 1
-        [97, 99, 96, 98],     # Bar 2
-        [94, 96, 93, 95],     # Bar 3 - Pivot Low
-        [95, 97, 94, 96],     # Bar 4
-        [98, 100, 97, 99],    # Bar 5 - Pivot High
-        [99, 101, 98, 100],   # Bar 6
-        [96, 98, 95, 97],     # Bar 7 - Pivot Low (higher)
-        [97, 99, 96, 98],     # Bar 8
-        [100, 102, 99, 101],  # Bar 9 - Pivot High (higher)
-        [101, 103, 100, 102], # Bar 10
-        [98, 100, 97, 99],    # Bar 11 - Pivot Low (higher) 
-        [99, 101, 98, 100],   # Bar 12
-        [102, 104, 101, 103], # Bar 13 - Pivot High (highest for 6-pattern)
-        [103, 105, 102, 104], # Bar 14
+        # Bars để tạo 8-pivot ascending pattern
+        [100, 102, 99, 101],  # Bar 0
+        [101, 103, 100, 102], # Bar 1  
+        [102, 104, 95, 96],   # Bar 2 - P1 (L=95) Pivot Low 1
+        [96, 98, 95, 97],     # Bar 3
+        [97, 102, 96, 101],   # Bar 4 - P2 (H=102) Pivot High 1
+        [101, 103, 100, 102], # Bar 5
+        [102, 104, 98, 99],   # Bar 6 - P3 (L=98) Pivot Low 2, low[3]=98 > low[1]=95 ✓
+        [99, 101, 98, 100],   # Bar 7
+        [100, 106, 99, 105],  # Bar 8 - P4 (H=106) Pivot High 2
+        [105, 107, 104, 106], # Bar 9
+        [106, 108, 103, 104], # Bar 10 - P5 (L=103) Pivot Low 3, low[5]=103 > high[2]=102 ✓
+        [104, 106, 103, 105], # Bar 11
+        [105, 110, 104, 109], # Bar 12 - P6 (H=110) Pivot High 3
+        [109, 111, 108, 110], # Bar 13
+        [110, 112, 105, 106], # Bar 14 - P7 (L=105) Pivot Low 4 (retest P4=106)
+        [106, 108, 105, 107], # Bar 15
+        [107, 115, 106, 114], # Bar 16 - P8 (H=115) Pivot High 4 (highest)
         
-        # Downtrend phase (cần để tạo 6-pattern downtrend)
-        [104, 105, 100, 101], # Bar 15 - Start break down
-        [101, 102, 98, 99],   # Bar 16 - Lower low
-        [99, 101, 97, 100],   # Bar 17 - Bounce
-        [100, 101, 95, 96],   # Bar 18 - Lower low
-        [96, 98, 94, 97],     # Bar 19 - Bounce  
-        [97, 98, 92, 93],     # Bar 20 - Lowest (for 6-pattern)
+        # Transition bars
+        [114, 116, 113, 115], # Bar 17
+        [115, 117, 114, 116], # Bar 18
         
-        # CHoCH Up setup
-        [93, 94, 91, 92],     # Bar 21 - Pre-CHoCH bar (H=94)
-        [92, 99, 91, 98],     # Bar 22 - CHoCH bar: low(91) > low(91), close(98) > high(94), close > pivot4
-        [98, 105, 97, 104],   # Bar 23 - Confirmation: low(97) > high(94) của pre-CHoCH ✅
-        [104, 106, 103, 105], # Bar 24 - Continue up
+        # CHoCH setup - break down then up
+        [116, 117, 110, 111], # Bar 19 - Start break down
+        [111, 112, 107, 108], # Bar 20 - Lower
+        [108, 109, 105, 106], # Bar 21 - Even lower
+        [106, 107, 103, 104], # Bar 22 - Lowest point
+        [104, 105, 102, 103], # Bar 23 - Pre-CHoCH bar (H=105)
+        [103, 118, 102, 117], # Bar 24 - CHoCH bar: close(117) > high(105), close > pivot6
+        [117, 120, 116, 119], # Bar 25 - Confirmation: low(116) > high(105) ✅
     ]
     
     df = pd.DataFrame(data, columns=['open', 'high', 'low', 'close'])
@@ -59,12 +62,12 @@ def create_choch_confirmation_data():
     return df
 
 def test_choch_confirmation():
-    """Test CHoCH confirmation logic"""
-    logger.info("=== CHoCH CONFIRMATION TEST ===")
+    """Test CHoCH confirmation logic with 8-pivot pattern"""
+    logger.info("=== CHoCH CONFIRMATION TEST (8-PIVOT) ===")
     
     # Tạo data với CHoCH confirmation pattern
     df = create_choch_confirmation_data()
-    logger.info(f"Created {len(df)} bars with CHoCH confirmation pattern")
+    logger.info(f"Created {len(df)} bars with CHoCH confirmation pattern (8-pivot)")
     
     # Print data để kiểm tra
     print("\nPrice data:")

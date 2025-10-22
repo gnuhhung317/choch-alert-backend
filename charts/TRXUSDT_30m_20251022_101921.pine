@@ -1,0 +1,156 @@
+// CHoCH Signal for TRXUSDT 30m
+// Generated on 2025-10-22 10:19:21
+
+//@version=5
+indicator("CHoCH Signal - TRXUSDT", overlay=true)
+
+// Pivot Highs
+var line[] highLines = array.new_line()
+
+line.new(
+    x1=1761091200000, y1=0.32,
+    x2=1761087600000, y2=0.32,
+    color=color.new(color.aqua, 0),
+    width=2,
+    style=line.style_dashed
+)
+
+line.new(
+    x1=1761087600000, y1=0.32,
+    x2=1761084000000, y2=0.32,
+    color=color.new(color.aqua, 0),
+    width=2,
+    style=line.style_dashed
+)
+
+line.new(
+    x1=1761084000000, y1=0.32,
+    x2=1761075000000, y2=0.32,
+    color=color.new(color.aqua, 0),
+    width=2,
+    style=line.style_dashed
+)
+
+line.new(
+    x1=1761075000000, y1=0.32,
+    x2=1761067800000, y2=0.32,
+    color=color.new(color.aqua, 0),
+    width=2,
+    style=line.style_dashed
+)
+
+line.new(
+    x1=1761067800000, y1=0.32,
+    x2=1761064200000, y2=0.33,
+    color=color.new(color.aqua, 0),
+    width=2,
+    style=line.style_dashed
+)
+
+line.new(
+    x1=1761064200000, y1=0.33,
+    x2=1761049800000, y2=0.32,
+    color=color.new(color.aqua, 0),
+    width=2,
+    style=line.style_dashed
+)
+
+line.new(
+    x1=1761049800000, y1=0.32,
+    x2=1761044400000, y2=0.32,
+    color=color.new(color.aqua, 0),
+    width=2,
+    style=line.style_dashed
+)
+
+line.new(
+    x1=1761044400000, y1=0.32,
+    x2=1761035400000, y2=0.32,
+    color=color.new(color.aqua, 0),
+    width=2,
+    style=line.style_dashed
+)
+
+// Pivot Lows
+
+line.new(
+    x1=1761093000000, y1=0.32,
+    x2=1761089400000, y2=0.32,
+    color=color.new(color.yellow, 0),
+    width=2,
+    style=line.style_dashed
+)
+
+line.new(
+    x1=1761089400000, y1=0.32,
+    x2=1761085800000, y2=0.32,
+    color=color.new(color.yellow, 0),
+    width=2,
+    style=line.style_dashed
+)
+
+line.new(
+    x1=1761085800000, y1=0.32,
+    x2=1761069600000, y2=0.32,
+    color=color.new(color.yellow, 0),
+    width=2,
+    style=line.style_dashed
+)
+
+line.new(
+    x1=1761069600000, y1=0.32,
+    x2=1761066000000, y2=0.32,
+    color=color.new(color.yellow, 0),
+    width=2,
+    style=line.style_dashed
+)
+
+line.new(
+    x1=1761066000000, y1=0.32,
+    x2=1761051600000, y2=0.32,
+    color=color.new(color.yellow, 0),
+    width=2,
+    style=line.style_dashed
+)
+
+line.new(
+    x1=1761051600000, y1=0.32,
+    x2=1761046200000, y2=0.32,
+    color=color.new(color.yellow, 0),
+    width=2,
+    style=line.style_dashed
+)
+
+line.new(
+    x1=1761046200000, y1=0.32,
+    x2=1761037200000, y2=0.32,
+    color=color.new(color.yellow, 0),
+    width=2,
+    style=line.style_dashed
+)
+
+line.new(
+    x1=1761037200000, y1=0.32,
+    x2=1761033600000, y2=0.32,
+    color=color.new(color.yellow, 0),
+    width=2,
+    style=line.style_dashed
+)
+
+line.new(
+    x1=1761033600000, y1=0.32,
+    x2=1761022800000, y2=0.32,
+    color=color.new(color.yellow, 0),
+    width=2,
+    style=line.style_dashed
+)
+
+// CHoCH Signal
+label.new(
+    x=1761100200000, y=0.32,
+    text="CHoCH\n$0.32",
+    color=color.lime,
+    textcolor=color.white,
+    size=size.large,
+    style=label.style_label_up
+)
