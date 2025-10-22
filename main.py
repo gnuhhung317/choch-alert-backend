@@ -398,7 +398,7 @@ class ChochAlertSystem:
         try:
             # Start sequential monitoring loop
             logger.info("[OK] Starting sequential monitoring loop with dynamic symbol fetching...")
-            unlimited_text = "UNLIMITED symbols" if config.UNLIMITED_PAIRS else f"up to {config.MAX_PAIRS} symbols"
+            unlimited_text = "UNLIMITED symbols" if config.MAX_PAIRS == 0 else f"up to {config.MAX_PAIRS} symbols"
             logger.info(f"Each scan will fetch {unlimited_text} based on config")
             logger.info("Press Ctrl+C to stop")
             
@@ -441,7 +441,7 @@ class ChochAlertSystem:
                         quote=config.QUOTE_CURRENCY,
                         max_pairs=config.MAX_PAIRS
                     )
-                    mode_text = "UNLIMITED" if config.UNLIMITED_PAIRS else f"max_pairs={config.MAX_PAIRS}"
+                    mode_text = "UNLIMITED" if config.MAX_PAIRS == 0 else f"max_pairs={config.MAX_PAIRS}"
                     logger.info(f"[Loop #{loop_count}] Using {len(selected_symbols)} symbols ({mode_text})")
                 else:
                     # Use specified symbols (no randomization)
