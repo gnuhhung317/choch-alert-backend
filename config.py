@@ -18,11 +18,12 @@ TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '-4848555942')
 # Trading Configuration
 SYMBOL = os.getenv('SYMBOL', 'BTCUSDT')  # Single symbol mode (legacy)
 SYMBOLS = os.getenv('SYMBOLS', '')  # Multi-symbol mode: 'BTCUSDT,ETHUSDT,BNBUSDT' or 'ALL' for all coins
-TIMEFRAMES = os.getenv('TIMEFRAMES', '5m,15m,30m,1h').split(',')
+TIMEFRAMES = os.getenv('TIMEFRAMES', '15m,30m,1h').split(',')
 
 # Multi-coin Configuration
 FETCH_ALL_COINS = os.getenv('FETCH_ALL_COINS', '1') == '1'  # Set to 1 to fetch all Binance coins
-MIN_VOLUME_24H = float(os.getenv('MIN_VOLUME_24H', '1000000'))  # Minimum 24h volume in USDT
+MIN_VOLUME_24H = float(os.getenv('MIN_VOLUME_24H', '10000'))  # Minimum 24h volume in USDT
+MAX_PAIRS = int(os.getenv('MAX_PAIRS', '0'))  # Maximum number of pairs to monitor (0 = unlimited)
 QUOTE_CURRENCY = os.getenv('QUOTE_CURRENCY', 'USDT')  # Filter by quote currency
 
 # Pivot Configuration

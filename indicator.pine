@@ -108,6 +108,7 @@ if (isPH or isPL)
 
 // ========== 8-Pattern ==========
 var float pivot6 = na   // p6 (reference cho CHoCH)
+var float pivot5 = na   // p5 (additional reference cho CHoCH)
 eightReady = pCount() >= 8
 if eightReady
     [b8,p8,h8] = getPivotFromEnd(0)
@@ -166,8 +167,9 @@ if eightReady
     // Downtrend pattern + DOWN breakout conditions
     lastEightDown := downStruct and downOrderOK and touchRetest and isLowest8  and downBreakout
 
-    // Lưu p6 khi mẫu hợp lệ
+    // Lưu p5 và p6 khi mẫu hợp lệ
     if (lastEightDown or lastEightUp)
+        pivot5 := p5
         pivot6 := p6
 
     lastEightBarIdx := b8
@@ -179,16 +181,16 @@ isAfterEight = eightReady and (bar_index > nz(lastEightBarIdx))
 var bool fireChochUp = false
 var bool fireChochDn = false
 
-if eightReady and not na(pivot6)
+if eightReady and not na(pivot6) and not na(pivot5)
     // Điều kiện CHoCH cũ (nến-kề) — giữ nguyên
     chochUpBar_old   = (low > low[1])   and (close > high[1])
     chochDownBar_old = (high < high[1]) and (close < low[1])
 
-    // BỔ SUNG logic mới:
-    // Downtrend → CHoCH Up khi close > pivot6
-    // Uptrend   → CHoCH Down khi close < pivot6
-    condUp   = lastEightDown and (close > (pivot6 + tol))
-    condDown = lastEightUp   and (close < (pivot6 - tol))
+    // BỔ SUNG logic mới với pivot5:
+    // CHoCH Up: close > pivot6 AND close < pivot5 (nằm giữa pivot6 và pivot5)
+    // CHoCH Down: close < pivot6 AND close > pivot5 (nằm giữa pivot5 và pivot6)
+    condUp   = lastEightDown and (close > (pivot6 + tol)) and (close < (pivot5 - tol))
+    condDown = lastEightUp   and (close < (pivot6 - tol)) and (close > (pivot5 + tol))
 
     baseUp   = isAfterEight and chochUpBar_old   and condUp
     baseDown = isAfterEight and chochDownBar_old and condDown
@@ -229,7 +231,7 @@ if plotEightLbl and eightReady
 
 // ========== Bảng thông tin ==========
 if showTable and barstate.islast
-    var table infoTable = table.new(position.top_right, 2, 10, bgcolor=color.white, border_width=1)
+    var table infoTable = table.new(position.top_right, 2, 11, bgcolor=color.white, border_width=1)
     table.cell(infoTable, 0, 0, "8-Pattern Status", text_color=color.black, bgcolor=color.gray)
     table.cell(infoTable, 1, 0, "", text_color=color.black)
     
@@ -245,10 +247,13 @@ if showTable and barstate.islast
         table.cell(infoTable, 0, 3, "Reference P6", text_color=color.black)
         table.cell(infoTable, 1, 3, not na(pivot6) ? str.tostring(pivot6, "#.####") : "N/A", text_color=color.black)
         
-        table.cell(infoTable, 0, 4, "CHoCH Locked", text_color=color.black)
+        table.cell(infoTable, 0, 4, "Reference P5", text_color=color.black)
+        table.cell(infoTable, 1, 4, not na(pivot5) ? str.tostring(pivot5, "#.####") : "N/A", text_color=color.black)
+        
+        table.cell(infoTable, 0, 5, "CHoCH Locked", text_color=color.black)
         lockStatus = chochLocked ? "🔒 Yes" : "🔓 No"
         lockColor = chochLocked ? color.red : color.green
-        table.cell(infoTable, 1, 4, lockStatus, text_color=lockColor)
+        table.cell(infoTable, 1, 5, lockStatus, text_color=lockColor)
     else
         table.cell(infoTable, 0, 1, "Status", text_color=color.black)
         table.cell(infoTable, 1, 1, "Need " + str.tostring(8 - pCount()) + " more pivots", text_color=color.orange)

@@ -257,9 +257,11 @@ class ChochAlertSystem:
             logger.info(f"Fetching all futures from Binance with {config.QUOTE_CURRENCY} pairs...")
             symbols_list = await self.fetcher.get_all_usdt_pairs(
                 min_volume_24h=config.MIN_VOLUME_24H,
-                quote=config.QUOTE_CURRENCY
+                quote=config.QUOTE_CURRENCY,
+                max_pairs=config.MAX_PAIRS
             )
-            logger.info(f"Found {len(symbols_list)} futures to plot")
+            mode_text = "UNLIMITED" if config.MAX_PAIRS == 0 else f"LIMITED to {config.MAX_PAIRS}"
+            logger.info(f"Found {len(symbols_list)} futures to plot ({mode_text})")
         else:
             symbols_list = [s.replace('/', '') for s in symbols_to_monitor]
             logger.info(f"Plotting {len(symbols_list)} symbols: {', '.join(symbols_list)}")
@@ -396,7 +398,8 @@ class ChochAlertSystem:
         try:
             # Start sequential monitoring loop
             logger.info("[OK] Starting sequential monitoring loop with dynamic symbol fetching...")
-            logger.info("Each scan will fetch symbols and randomly select 100 for processing")
+            unlimited_text = "UNLIMITED symbols" if config.UNLIMITED_PAIRS else f"up to {config.MAX_PAIRS} symbols"
+            logger.info(f"Each scan will fetch {unlimited_text} based on config")
             logger.info("Press Ctrl+C to stop")
             
             await self.monitor_loop()
@@ -411,7 +414,7 @@ class ChochAlertSystem:
     async def monitor_loop(self):
         """
         Sequential monitoring loop with per-timeframe scheduling and dynamic symbol fetching.
-        Each scan will fetch fresh symbol list and randomly select 100 symbols to process.
+        Each scan will fetch symbol list according to UNLIMITED_PAIRS and MAX_PAIRS config.
         """
         loop_count = 0
         
@@ -433,21 +436,13 @@ class ChochAlertSystem:
                 
                 if symbols_to_monitor == 'ALL':
                     logger.info(f"[Loop #{loop_count}] Fetching fresh symbol list from Binance...")
-                    all_symbols = await self.fetcher.get_all_usdt_pairs(
+                    selected_symbols = await self.fetcher.get_all_usdt_pairs(
                         min_volume_24h=config.MIN_VOLUME_24H,
-                        quote=config.QUOTE_CURRENCY
+                        quote=config.QUOTE_CURRENCY,
+                        max_pairs=config.MAX_PAIRS
                     )
-                    
-                    # ⬇️ RANDOM SELECT 100 SYMBOLS
-                    if len(all_symbols) > 100:
-                        selected_symbols = random.sample(all_symbols, 100)
-                        logger.info(f"[Loop #{loop_count}] Randomly selected 100 symbols from {len(all_symbols)} available")
-                        # Show first 10 selected symbols for reference
-                        sample_symbols = selected_symbols[:10]
-                        logger.info(f"[Loop #{loop_count}] Sample selected: {', '.join(sample_symbols)}... (+{len(selected_symbols)-10} more)")
-                    else:
-                        selected_symbols = all_symbols
-                        logger.info(f"[Loop #{loop_count}] Using all {len(all_symbols)} symbols (less than 100)")
+                    mode_text = "UNLIMITED" if config.UNLIMITED_PAIRS else f"max_pairs={config.MAX_PAIRS}"
+                    logger.info(f"[Loop #{loop_count}] Using {len(selected_symbols)} symbols ({mode_text})")
                 else:
                     # Use specified symbols (no randomization)
                     selected_symbols = [s.replace('/', '') for s in symbols_to_monitor]

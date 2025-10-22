@@ -30,6 +30,7 @@ class TimeframeState:
         self.last_eight_up = False
         self.last_eight_down = False
         self.last_eight_bar_idx: Optional[int] = None
+        self.pivot5: Optional[float] = None  # Pivot 5 for additional CHoCH condition
         self.pivot6: Optional[float] = None  # Changed from pivot4 to pivot6 for 8-pivot pattern
         self.choch_locked = False
         self.choch_bar_idx: Optional[int] = None  # Bar where CHoCH triggered
@@ -59,6 +60,7 @@ class TimeframeState:
         self.last_eight_up = False
         self.last_eight_down = False
         self.last_eight_bar_idx = None
+        self.pivot5 = None
         self.pivot6 = None
         self.choch_locked = False
         self.choch_bar_idx = None
@@ -368,6 +370,7 @@ class ChochDetector:
         state.last_eight_down = down_struct and down_order_ok and touch_retest and is_lowest8 and down_breakout
         
         if state.last_eight_up or state.last_eight_down:
+            state.pivot5 = p5  # Reference pivot 5 for additional CHoCH condition
             state.pivot6 = p6  # Reference pivot for CHoCH (was p4 in 6-pivot pattern)
             state.last_eight_bar_idx = b8
             
@@ -422,15 +425,17 @@ class ChochDetector:
             return False, False
 
         # CHoCH conditions on previous bar (nến CHoCH - ĐÃ ĐÓNG)
-        # CHoCH Up: low[prev] > low[pre_prev] AND close[prev] > high[pre_prev] AND close[prev] > pivot6
+        # CHoCH Up: low[prev] > low[pre_prev] AND close[prev] > high[pre_prev] AND close[prev] > pivot6 AND close[prev] < pivot5
         choch_up_bar = (prev['low'] > pre_prev['low'] and 
                        prev['close'] > pre_prev['high'] and 
-                       prev['close'] > state.pivot6)
+                       prev['close'] > state.pivot6 and
+                       prev['close'] < state.pivot5)
         
-        # CHoCH Down: high[prev] < high[pre_prev] AND close[prev] < low[pre_prev] AND close[prev] < pivot6
+        # CHoCH Down: high[prev] < high[pre_prev] AND close[prev] < low[pre_prev] AND close[prev] < pivot6 AND close[prev] > pivot5
         choch_down_bar = (prev['high'] < pre_prev['high'] and 
                          prev['close'] < pre_prev['low'] and 
-                         prev['close'] < state.pivot6)
+                         prev['close'] < state.pivot6 and
+                         prev['close'] > state.pivot5)
 
         # Match with pattern direction
         base_up = is_after_eight and state.last_eight_down and choch_up_bar

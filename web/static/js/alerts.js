@@ -75,8 +75,9 @@ socket.on('alerts_history', (alerts) => {
         // Apply current filters
         const filteredAlerts = applyCurrentFilters(alerts);
         
-        // Display filtered alerts
-        filteredAlerts.forEach(alert => addAlertToTable(alert, false));
+        // Display filtered alerts (already sorted by timestamp DESC from backend)
+        // Add alerts in order without inserting at top since backend already sorts DESC
+        filteredAlerts.forEach(alert => addAlertToTable(alert, false, false));
         totalAlerts = alerts.length;
         updateAlertCount(filteredAlerts.length);
     }
@@ -104,8 +105,8 @@ socket.on('alert', (data) => {
             alertsTableBody.innerHTML = '';
         }
         
-        // Add to table with animation
-        addAlertToTable(data, true);
+        // Add to table with animation (insert at top for real-time)
+        addAlertToTable(data, true, true);
         
         // Show browser notification
         showNotification(data);
@@ -134,7 +135,7 @@ function updateConnectionStatus(connected) {
     }
 }
 
-function addAlertToTable(alert, animate = true) {
+function addAlertToTable(alert, animate = true, insertAtTop = true) {
     const row = document.createElement('tr');
     if (animate) {
         row.className = 'new-alert-animation';
@@ -158,8 +159,13 @@ function addAlertToTable(alert, animate = true) {
         </a></td>
     `;
     
-    // Insert at the beginning
-    alertsTableBody.insertBefore(row, alertsTableBody.firstChild);
+    if (insertAtTop) {
+        // Insert at the beginning (for new real-time alerts)
+        alertsTableBody.insertBefore(row, alertsTableBody.firstChild);
+    } else {
+        // Append at the end (for historical data already sorted DESC)
+        alertsTableBody.appendChild(row);
+    }
     
     // Keep only last 100 rows
     while (alertsTableBody.children.length > 100) {
@@ -323,7 +329,7 @@ function applyFilters() {
     if (filteredAlerts.length === 0) {
         showNoAlerts();
     } else {
-        filteredAlerts.forEach(alert => addAlertToTable(alert, false));
+        filteredAlerts.forEach(alert => addAlertToTable(alert, false, false));
     }
     
     // Update alert count
@@ -350,9 +356,9 @@ function clearFilters() {
         Array.from(select.options).forEach(option => option.selected = false);
     });
     
-    // Show all alerts
+    // Show all alerts (append at end to maintain DESC order from backend)
     alertsTableBody.innerHTML = '';
-    allAlerts.forEach(alert => addAlertToTable(alert, false));
+    allAlerts.forEach(alert => addAlertToTable(alert, false, false));
     
     // Update alert count
     updateAlertCount();

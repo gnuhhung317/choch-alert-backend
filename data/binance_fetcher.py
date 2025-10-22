@@ -63,28 +63,37 @@ class BinanceFetcher:
             await self.exchange.close()
             logger.info("Binance exchange connection closed")
     
-    async def get_all_usdt_pairs(self, min_volume_24h: float = 1000000, quote: str = 'USDT') -> List[str]:
+    async def get_all_usdt_pairs(self, min_volume_24h: float = 1000000, quote: str = 'USDT', 
+                               max_pairs: int = 100) -> List[str]:
         """
-        Get all trading pairs with specified quote currency and minimum volume
+        Get all FUTURES trading pairs with specified quote currency and minimum volume
+        Always includes BTC, ETH, BNB as fixed coins + random selection of others
         
         Args:
             min_volume_24h: Minimum 24h volume in quote currency
             quote: Quote currency (e.g., 'USDT', 'BUSD')
+            max_pairs: Maximum number of pairs to return (0 = unlimited)
         
         Returns:
-            List of symbol strings for futures (e.g., ['BTCUSDT', 'ETHUSDT'])
+            List of FUTURES symbol strings (e.g., ['BTCUSDT', 'ETHUSDT'])
         """
         if not self.exchange:
             await self.initialize()
+        
+        # Fixed coins to always monitor
+        FIXED_COINS = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT']
         
         try:
             # Fetch all tickers
             tickers = await self.exchange.fetch_tickers()
             
-            # Filter by quote currency and volume
-            valid_pairs = []
+            # Start with fixed coins
+            valid_pairs = FIXED_COINS.copy()
+            
+            # Add other coins (skip if already in fixed list)
             for symbol, ticker in tickers.items():
                 # For futures, symbols are like 'BTC/USDT:USDT' (perpetual)
+                # Only process futures symbols (with colon)
                 if ':' in symbol:
                     # Format: BTC/USDT:USDT (perpetual)
                     base_quote, settle = symbol.split(':')
@@ -94,25 +103,34 @@ class BinanceFetcher:
                         if volume_24h and volume_24h >= min_volume_24h:
                             # Return in format BTCUSDT (without slash)
                             clean_symbol = base_quote.replace('/', '')
-                            valid_pairs.append(clean_symbol)
-                elif '/' in symbol and symbol.endswith(f'/{quote}'):
-                    # Spot format: BTC/USDT
-                    volume_24h = ticker.get('quoteVolume', 0)
-                    if volume_24h and volume_24h >= min_volume_24h:
-                        # Convert to BTCUSDT format
-                        clean_symbol = symbol.replace('/', '')
-                        valid_pairs.append(clean_symbol)
+                            if clean_symbol not in valid_pairs:  # Skip duplicates
+                                valid_pairs.append(clean_symbol)
+                # Skip spot symbols (without colon) to ensure futures only
             
-            logger.info(f"Found {len(valid_pairs)} futures pairs with {quote} quote and volume >= ${min_volume_24h:,.0f}")
-            return sorted(valid_pairs)
+            # Shuffle and limit pairs based on max_pairs
+            import random
+            fixed_count = len(FIXED_COINS)
+            others = valid_pairs[fixed_count:]
+            random.shuffle(others)
+            
+            if max_pairs == 0:
+                # Return ALL pairs (fixed + all others) - unlimited mode
+                final_pairs = valid_pairs[:fixed_count] + others
+                logger.info(f"Selected ALL {len(final_pairs)} FUTURES pairs: {fixed_count} fixed + {len(others)} others (UNLIMITED mode)")
+            else:
+                # Take fixed + random up to max_pairs total
+                final_pairs = valid_pairs[:fixed_count] + others[:max_pairs-fixed_count]
+                logger.info(f"Selected {len(final_pairs)} FUTURES pairs: {fixed_count} fixed + {len(final_pairs)-fixed_count} others (LIMITED to {max_pairs})")
+            
+            return final_pairs
         
         except Exception as e:
             logger.error(f"Error fetching trading pairs: {e}")
-            return []
+            return FIXED_COINS  # Return at least fixed coins on error
     
     async def fetch_historical(self, symbol: str, timeframe: str, limit: int = 500) -> pd.DataFrame:
         """
-        Fetch historical OHLCV data (CLOSED CANDLES ONLY)
+        Fetch historical OHLCV FUTURES data (CLOSED CANDLES ONLY)
         
         Args:
             symbol: Trading pair in Binance Futures format (e.g., 'BTCUSDT')
@@ -120,7 +138,7 @@ class BinanceFetcher:
             limit: Number of candles to fetch
         
         Returns:
-            DataFrame with CLOSED candles only, excluding the currently forming candle
+            DataFrame with CLOSED FUTURES candles only, excluding the currently forming candle
         """
         if not self.exchange:
             await self.initialize()
