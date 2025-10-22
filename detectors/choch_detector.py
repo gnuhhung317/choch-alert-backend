@@ -358,11 +358,13 @@ class ChochDetector:
             up_breakout = False
             down_breakout = False
         
-        # Validate pattern
+        # Validate pattern - uptrend cần up_breakout, downtrend cần down_breakout
         old_eight_up = state.last_eight_up
         old_eight_down = state.last_eight_down
         
+        # Uptrend pattern với up breakout conditions
         state.last_eight_up = up_struct and up_order_ok and touch_retest and is_highest8 and up_breakout
+        # Downtrend pattern với down breakout conditions  
         state.last_eight_down = down_struct and down_order_ok and touch_retest and is_lowest8 and down_breakout
         
         if state.last_eight_up or state.last_eight_down:
@@ -370,11 +372,11 @@ class ChochDetector:
             state.last_eight_bar_idx = b8
             
             if state.last_eight_up:
-                logger.info(f"[8-PIVOT] ✓✓✓ VALID UPTREND: P1:{p1:.6f}(L) -> P2:{p2:.6f}(H) -> P3:{p3:.6f}(L) -> P4:{p4:.6f}(H) -> P5:{p5:.6f}(L) -> P6:{p6:.6f}(H) -> P7:{p7:.6f}(L-retest P4) -> P8:{p8:.6f}(H)")
-                logger.info(f"   Breakout: low[5]({lo5:.6f}) > high[2]({hi2:.6f}) = {lo5 > hi2}, low[3]({lo3:.6f}) > low[1]({lo1:.6f}) = {lo3 > lo1}")
+                logger.info(f"[8-PIVOT] ✓✓✓ VALID UPTREND PATTERN: P1:{p1:.6f}(L) -> P2:{p2:.6f}(H) -> P3:{p3:.6f}(L) -> P4:{p4:.6f}(H) -> P5:{p5:.6f}(L) -> P6:{p6:.6f}(H) -> P7:{p7:.6f}(L-retest P4) -> P8:{p8:.6f}(H)")
+                logger.info(f"   Breakout UP conditions: low[5]({lo5:.6f}) > high[2]({hi2:.6f}) = {lo5 > hi2}, low[3]({lo3:.6f}) > low[1]({lo1:.6f}) = {lo3 > lo1}")
             else:
-                logger.info(f"[8-PIVOT] ✓✓✓ VALID DOWNTREND: P1:{p1:.6f}(H) -> P2:{p2:.6f}(L) -> P3:{p3:.6f}(H) -> P4:{p4:.6f}(L) -> P5:{p5:.6f}(H) -> P6:{p6:.6f}(L) -> P7:{p7:.6f}(H-retest P4) -> P8:{p8:.6f}(L)")
-                logger.info(f"   Breakout: high[5]({hi5:.6f}) < low[2]({lo2:.6f}) = {hi5 < lo2}, high[3]({hi3:.6f}) < high[1]({hi1:.6f}) = {hi3 < hi1}")
+                logger.info(f"[8-PIVOT] ✓✓✓ VALID DOWNTREND PATTERN: P1:{p1:.6f}(H) -> P2:{p2:.6f}(L) -> P3:{p3:.6f}(H) -> P4:{p4:.6f}(L) -> P5:{p5:.6f}(H) -> P6:{p6:.6f}(L) -> P7:{p7:.6f}(H-retest P4) -> P8:{p8:.6f}(L)")
+                logger.info(f"   Breakout DOWN conditions: high[5]({hi5:.6f}) < low[2]({lo2:.6f}) = {hi5 < lo2}, high[3]({hi3:.6f}) < high[1]({hi1:.6f}) = {hi3 < hi1}")
             
             return True
         
