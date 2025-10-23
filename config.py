@@ -18,7 +18,7 @@ TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '-4848555942')
 # Trading Configuration
 SYMBOL = os.getenv('SYMBOL', 'BTCUSDT')  # Single symbol mode (legacy)
 SYMBOLS = os.getenv('SYMBOLS', '')  # Multi-symbol mode: 'BTCUSDT,ETHUSDT,BNBUSDT' or 'ALL' for all coins
-TIMEFRAMES = os.getenv('TIMEFRAMES', '10m,20m,40m,50m,15m,30m,1h').split(',')
+TIMEFRAMES = os.getenv('TIMEFRAMES', '10m,20m,40m,25m,15m,30m,1h').split(',')
 
 # Multi-coin Configuration
 FETCH_ALL_COINS = os.getenv('FETCH_ALL_COINS', '1') == '1'  # Set to 1 to fetch all Binance coins

@@ -56,3 +56,4 @@ data/*.json
 !data/.gitkeep
 
 data/choch_alerts.db
+*.db

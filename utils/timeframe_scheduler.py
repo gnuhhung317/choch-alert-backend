@@ -28,6 +28,7 @@ class TimeframeScheduler:
         '10m': 10,   # Aggregated from 5m
         '15m': 15,
         '20m': 20,   # Aggregated from 5m
+        '25m': 25,   # Aggregated from 5m
         '30m': 30,
         '40m': 40,   # Aggregated from 5m
         '50m': 50,   # Aggregated from 5m

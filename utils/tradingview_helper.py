@@ -34,17 +34,22 @@ def get_tradingview_interval(timeframe: str) -> str:
     Convert Binance timeframe to TradingView interval
     
     Args:
-        timeframe: Binance timeframe (e.g., '1m', '5m', '15m', '1h', '4h', '1d')
+        timeframe: Binance timeframe (e.g., '1m', '5m', '10m', '15m', '1h', '4h', '1d')
     
     Returns:
-        TradingView interval (e.g., '1', '5', '15', '60', '240', 'D')
+        TradingView interval (e.g., '1', '5', '10', '15', '60', '240', 'D')
     """
     mapping = {
         '1m': '1',
         '3m': '3',
         '5m': '5',
+        '10m': '10',     # Aggregated timeframe
         '15m': '15',
+        '20m': '20',     # Aggregated timeframe
+        '25m': '25',     # Aggregated timeframe
         '30m': '30',
+        '40m': '40',     # Aggregated timeframe
+        '50m': '50',     # Aggregated timeframe
         '1h': '60',
         '2h': '120',
         '4h': '240',
@@ -129,10 +134,12 @@ if __name__ == '__main__':
     # Test examples
     test_cases = [
         ('BTCUSDT', '5m'),
-        ('ETHUSDT', '15m'),
-        ('BNBUSDT', '1h'),
-        ('XRPUSDT', '4h'),
-        ('ZRXUSDT', '5m'),
+        ('ETHUSDT', '10m'),   # Aggregated timeframe
+        ('BNBUSDT', '15m'),
+        ('XRPUSDT', '20m'),   # Aggregated timeframe
+        ('AVNTUSDT', '30m'),
+        ('SOLUSDT', '1h'),
+        ('ADAUSDT', '4h'),
     ]
     
     print("=" * 80)
