@@ -15,6 +15,7 @@ import config
 
 # Import modules
 from data.binance_fetcher import BinanceFetcher
+from data.timeframe_adapter import TimeframeAdapter
 from detectors.choch_detector import ChochDetector
 from alert.telegram_sender import TelegramSender, create_alert_data
 from web.app import broadcast_alert, start_flask_background
@@ -62,10 +63,14 @@ class ChochAlertSystem:
             sys.exit(1)
         
         # Initialize components
-        self.fetcher = BinanceFetcher(
+        base_fetcher = BinanceFetcher(
             api_key=config.BINANCE_API_KEY,
             secret=config.BINANCE_SECRET
         )
+        
+        # Wrap with TimeframeAdapter to support aggregated timeframes (10m, 20m, 40m, 50m)
+        self.fetcher = TimeframeAdapter(base_fetcher)
+        logger.info("[OK] Using TimeframeAdapter for automatic candle aggregation")
         
         self.detector = ChochDetector(
             left=config.PIVOT_LEFT,

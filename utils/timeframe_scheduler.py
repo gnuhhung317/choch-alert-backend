@@ -25,8 +25,12 @@ class TimeframeScheduler:
         '1m': 1,
         '3m': 3,
         '5m': 5,
+        '10m': 10,   # Aggregated from 5m
         '15m': 15,
+        '20m': 20,   # Aggregated from 5m
         '30m': 30,
+        '40m': 40,   # Aggregated from 5m
+        '50m': 50,   # Aggregated from 5m
         '1h': 60,
         '2h': 120,
         '4h': 240,
@@ -141,8 +145,9 @@ class TimeframeScheduler:
             current_minute_boundary = (now.minute // minutes) * minutes
             prev_close = now.replace(minute=current_minute_boundary, second=0)
             
-            # If we're exactly on the boundary, go back one period
-            if prev_close == now.replace(second=0):
+            # FIXED: Only go back one period if we're EXACTLY at the boundary time
+            # (both minute AND second must be 0 for the boundary)
+            if prev_close >= now:
                 prev_close = prev_close - timedelta(minutes=minutes)
             
             return prev_close
@@ -167,7 +172,7 @@ class TimeframeScheduler:
             current_block = (now.hour // hours) * hours
             prev_close = now.replace(hour=current_block, minute=0, second=0)
             
-            # If we're exactly on the boundary, go back one period
+            # FIXED: Only go back one period if we're at or after the boundary
             if prev_close >= now:
                 prev_close = prev_close - timedelta(hours=hours)
             
