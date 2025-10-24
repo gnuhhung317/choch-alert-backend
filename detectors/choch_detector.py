@@ -82,15 +82,14 @@ class ChochDetector:
     """Main CHoCH detector with multi-timeframe support"""
     
     def __init__(self, left: int = 1, right: int = 1, keep_pivots: int = 200,
-                 use_variant_filter: bool = True,
                  allow_ph1: bool = True, allow_ph2: bool = True, allow_ph3: bool = True,
                  allow_pl1: bool = True, allow_pl2: bool = True, allow_pl3: bool = True):
         
         self.left = left
         self.right = right
         self.keep_pivots = keep_pivots
-        self.use_variant_filter = use_variant_filter
         
+        # CHỈ detect pivot theo variant pattern (giống Pine Script)
         self.allow_variants = {
             'PH1': allow_ph1, 'PH2': allow_ph2, 'PH3': allow_ph3,
             'PL1': allow_pl1, 'PL2': allow_pl2, 'PL3': allow_pl3
@@ -105,63 +104,60 @@ class ChochDetector:
             self.states[timeframe] = TimeframeState(self.left, self.right, self.keep_pivots)
         return self.states[timeframe]
     
-    def detect_pivots(self, df: pd.DataFrame) -> Tuple[pd.Series, pd.Series]:
-        """
-        Detect pivot highs and pivot lows
-        Returns: (pivot_high_series, pivot_low_series)
-        """
-        high = df['high']
-        low = df['low']
+    def is_pivot_high_basic(self, df: pd.DataFrame, i: int) -> bool:
+        """Check if bar i is a basic pivot high (without variant filtering)"""
+        center_high = df['high'].iloc[i]
         
-        # Initialize result series
-        ph = pd.Series(index=df.index, dtype=float)
-        pl = pd.Series(index=df.index, dtype=float)
+        # Check left side
+        for j in range(i - self.left, i):
+            if df['high'].iloc[j] >= center_high:
+                return False
         
-        # Calculate pivots (need enough bars on both sides)
-        window_size = self.left + self.right + 1
+        # Check right side
+        for j in range(i + 1, i + self.right + 1):
+            if df['high'].iloc[j] > center_high:
+                return False
+        
+        return True
+    
+    def is_pivot_low_basic(self, df: pd.DataFrame, i: int) -> bool:
+        """Check if bar i is a basic pivot low (without variant filtering)"""
+        center_low = df['low'].iloc[i]
+        
+        # Check left side
+        for j in range(i - self.left, i):
+            if df['low'].iloc[j] <= center_low:
+                return False
+        
+        # Check right side
+        for j in range(i + 1, i + self.right + 1):
+            if df['low'].iloc[j] < center_low:
+                return False
+        
+        return True
+    
+    def detect_pivots_with_variants(self, df: pd.DataFrame) -> List[Tuple[int, float, bool, str]]:
+        """
+        Detect pivots CHỈ KHI match variant pattern (giống Pine Script)
+        
+        Returns: List of (index, price, is_high, variant_type)
+        """
+        pivots = []
         
         for i in range(self.left, len(df) - self.right):
-            # Check pivot high
-            center_high = high.iloc[i]
-            is_ph = True
+            # Check pivot high với variant
+            if self.is_pivot_high_basic(df, i):
+                variant = self.classify_variant(df, i, is_high=True)
+                if variant != "NA" and self.allow_variants.get(variant, False):
+                    pivots.append((i, df['high'].iloc[i], True, variant))
             
-            # Check left side
-            for j in range(i - self.left, i):
-                if high.iloc[j] >= center_high:
-                    is_ph = False
-                    break
-            
-            # Check right side
-            if is_ph:
-                for j in range(i + 1, i + self.right + 1):
-                    if high.iloc[j] > center_high:
-                        is_ph = False
-                        break
-            
-            if is_ph:
-                ph.iloc[i] = center_high
-            
-            # Check pivot low
-            center_low = low.iloc[i]
-            is_pl = True
-            
-            # Check left side
-            for j in range(i - self.left, i):
-                if low.iloc[j] <= center_low:
-                    is_pl = False
-                    break
-            
-            # Check right side
-            if is_pl:
-                for j in range(i + 1, i + self.right + 1):
-                    if low.iloc[j] < center_low:
-                        is_pl = False
-                        break
-            
-            if is_pl:
-                pl.iloc[i] = center_low
+            # Check pivot low với variant
+            if self.is_pivot_low_basic(df, i):
+                variant = self.classify_variant(df, i, is_high=False)
+                if variant != "NA" and self.allow_variants.get(variant, False):
+                    pivots.append((i, df['low'].iloc[i], False, variant))
         
-        return ph, pl
+        return pivots
     
     def classify_variant(self, df: pd.DataFrame, pivot_idx: int, is_high: bool) -> str:
         """
@@ -169,25 +165,26 @@ class ChochDetector:
         Uses triplet around the pivot bar
         
         Pine Script logic:
-        - Pivot is detected at bar_index - right
-        - Triplet uses: high[right+1], high[right], high[right-1]
-        - In Python: pivot_idx is the center, so we use pivot_idx-1, pivot_idx, pivot_idx+1
+        - Pivot is detected at bar_index - right (nến giữa)
+        - Triplet: high[right+1] (left), high[right] (center/pivot), high[right-1] (right)
+        - Timeline: [LEFT/h3] → [CENTER/h2/PIVOT] → [RIGHT/h1]
+        - In Python: pivot_idx-1 (left/h3), pivot_idx (center/h2), pivot_idx+1 (right/h1)
         """
         # Need bars on both sides
         if pivot_idx < 1 or pivot_idx >= len(df) - 1:
             return "NA"
         
-        # Triplet: left(h1), center(h2), right(h3)
-        # h1 = bar before pivot (left side)
-        # h2 = pivot bar itself (center)
-        # h3 = bar after pivot (right side)
-        h1 = df['high'].iloc[pivot_idx - 1]
-        h2 = df['high'].iloc[pivot_idx]
-        h3 = df['high'].iloc[pivot_idx + 1]
+        # Triplet mapping to Pine Script:
+        # h3 = left side (bar before pivot in timeline)
+        # h2 = center (pivot bar itself)
+        # h1 = right side (bar after pivot in timeline)
+        h3 = df['high'].iloc[pivot_idx - 1]  # LEFT side (high[right+1] in Pine)
+        h2 = df['high'].iloc[pivot_idx]      # CENTER (high[right] in Pine) - PIVOT
+        h1 = df['high'].iloc[pivot_idx + 1]  # RIGHT side (high[right-1] in Pine)
         
-        l1 = df['low'].iloc[pivot_idx - 1]
-        l2 = df['low'].iloc[pivot_idx]
-        l3 = df['low'].iloc[pivot_idx + 1]
+        l3 = df['low'].iloc[pivot_idx - 1]   # LEFT side
+        l2 = df['low'].iloc[pivot_idx]       # CENTER - PIVOT
+        l1 = df['low'].iloc[pivot_idx + 1]   # RIGHT side
         
         # Check for NA values
         if pd.isna(h1) or pd.isna(h2) or pd.isna(h3) or pd.isna(l1) or pd.isna(l2) or pd.isna(l3):
@@ -335,26 +332,22 @@ class ChochDetector:
         is_highest8 = p8 == max(all_prices)
         is_lowest8 = p8 == min(all_prices)
         
-        # Check order constraints for 8-pivot pattern
-        up_order_ok = (p2 < p4 < p6 < p8) and (p1 < p3 < p5 < p7)
-        down_order_ok = (p1 > p3 > p5 > p7) and (p2 > p4 > p6 > p8)
+        # Order constraints for 8-pivot pattern (loosened)
+        up_order_ok = (p2 < p4 < p6 < p8) and (p3 < p5 < p7)
+        down_order_ok = (p3 > p5 > p7) and (p2 > p4 > p6 > p8)
         
-        # Additional breakout conditions for 8-pivot pattern
+        # Breakout conditions (simplified - removed p1/p3 comparisons)
         try:
-            # For uptrend: low[5] > high[2] and low[3] > low[1]
+            # For uptrend: low[5] > high[2] (bỏ low[3] > low[1])
             lo5 = df.loc[b5, 'low']
             hi2 = df.loc[b2, 'high']
-            lo3 = df.loc[b3, 'low']
-            lo1 = df.loc[b1, 'low']
             
-            # For downtrend: high[5] < low[2] and high[3] < high[1]
+            # For downtrend: high[5] < low[2] (bỏ high[3] < high[1])
             hi5 = df.loc[b5, 'high']
             lo2 = df.loc[b2, 'low']
-            hi3 = df.loc[b3, 'high']
-            hi1 = df.loc[b1, 'high']
             
-            up_breakout = (lo5 > hi2) and (lo3 > lo1)
-            down_breakout = (hi5 < lo2) and (hi3 < hi1)
+            up_breakout = (lo5 > hi2)
+            down_breakout = (hi5 < lo2)
             
         except KeyError:
             up_breakout = False
@@ -376,10 +369,10 @@ class ChochDetector:
             
             if state.last_eight_up:
                 logger.info(f"[8-PIVOT] ✓✓✓ VALID UPTREND PATTERN: P1:{p1:.6f}(L) -> P2:{p2:.6f}(H) -> P3:{p3:.6f}(L) -> P4:{p4:.6f}(H) -> P5:{p5:.6f}(L) -> P6:{p6:.6f}(H) -> P7:{p7:.6f}(L-retest P4) -> P8:{p8:.6f}(H)")
-                logger.info(f"   Breakout UP conditions: low[5]({lo5:.6f}) > high[2]({hi2:.6f}) = {lo5 > hi2}, low[3]({lo3:.6f}) > low[1]({lo1:.6f}) = {lo3 > lo1}")
+                logger.info(f"   Breakout UP: low[5]({lo5:.6f}) > high[2]({hi2:.6f}) = {lo5 > hi2}")
             else:
                 logger.info(f"[8-PIVOT] ✓✓✓ VALID DOWNTREND PATTERN: P1:{p1:.6f}(H) -> P2:{p2:.6f}(L) -> P3:{p3:.6f}(H) -> P4:{p4:.6f}(L) -> P5:{p5:.6f}(H) -> P6:{p6:.6f}(L) -> P7:{p7:.6f}(H-retest P4) -> P8:{p8:.6f}(L)")
-                logger.info(f"   Breakout DOWN conditions: high[5]({hi5:.6f}) < low[2]({lo2:.6f}) = {hi5 < lo2}, high[3]({hi3:.6f}) < high[1]({hi1:.6f}) = {hi3 < hi1}")
+                logger.info(f"   Breakout DOWN: high[5]({hi5:.6f}) < low[2]({lo2:.6f}) = {hi5 < lo2}")
             
             return True
         
@@ -489,48 +482,31 @@ class ChochDetector:
         if len(df) < self.left + self.right + 1:
             return 0
         
-        # Detect pivots in entire dataframe
-        ph, pl = self.detect_pivots(df)
+        # Detect pivots CHỈ KHI match variant (giống Pine Script - không detect rồi mới filter)
+        pivots = self.detect_pivots_with_variants(df)
         
-        total_ph = ph.notna().sum()
-        total_pl = pl.notna().sum()
-        total_real_pivots = total_ph + total_pl
+        logger.info(f"[rebuild_pivots] {len(df)} bars → {len(pivots)} variant-matched pivots (NO pure pivot detection)")
         
-        # Process ALL pivots in dataframe
-        for check_idx in range(self.left, len(df) - self.right):
-            is_ph = pd.notna(ph.iloc[check_idx])
-            is_pl = pd.notna(pl.iloc[check_idx])
-            
-            if not (is_ph or is_pl):
-                continue
-            
-            pivot_price = ph.iloc[check_idx] if is_ph else pl.iloc[check_idx]
+        # Process ALL variant-matched pivots
+        for check_idx, pivot_price, is_high, variant in pivots:
             pivot_idx = df.index[check_idx]
-            is_high = is_ph
             
-            # Variant filtering
-            accept = True
-            if self.use_variant_filter:
-                variant = self.classify_variant(df, check_idx, is_high)
-                accept = variant != "NA" and self.allow_variants.get(variant, False)
+            # Insert fake pivot if needed (only once per gap)
+            if state.pivot_count() > 0:
+                last_bar, last_price, last_high = state.get_pivot_from_end(0)
+                self.insert_fake_pivot(state, df, last_bar, last_price, last_high, 
+                                      pivot_idx, is_high)
             
-            if accept:
-                # Insert fake pivot if needed (only once per gap)
-                if state.pivot_count() > 0:
-                    last_bar, last_price, last_high = state.get_pivot_from_end(0)
-                    self.insert_fake_pivot(state, df, last_bar, last_price, last_high, 
-                                          pivot_idx, is_high)
-                
-                # Store new pivot
-                state.store_pivot(pivot_idx, pivot_price, is_high)
-                state.last_pivot_bar = pivot_idx
-                state.last_pivot_price = pivot_price
+            # Store new pivot
+            state.store_pivot(pivot_idx, pivot_price, is_high)
+            state.last_pivot_bar = pivot_idx
+            state.last_pivot_price = pivot_price
         
         # Check for 8-pattern
         self.check_eight_pattern(state, df)
         
         pivot_after = state.pivot_count()
-        logger.info(f"[rebuild_pivots] {len(df)} bars → {total_real_pivots} real pivots → {pivot_after} total (with fakes)")
+        logger.info(f"[rebuild_pivots] Final: {pivot_after} total pivots (with fakes)")
         
         return pivot_after
     

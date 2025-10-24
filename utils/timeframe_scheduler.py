@@ -1,6 +1,12 @@
 """
 Timeframe Scheduler - Manages scan intervals for different timeframes
-Aligns with candle close times (e.g., 5m closes at :00, :05, :10, :15, etc.)
+Aligns with candle close times using FIXED REFERENCE POINTS
+
+CRITICAL: Uses same alignment logic as AlignedCandleAggregator to ensure
+scheduler and aggregator are perfectly synchronized.
+
+For timeframes like 25m that don't divide evenly into 24h, we use fixed
+reference points to calculate candle boundaries.
 """
 import logging
 from typing import Dict, List, Optional
@@ -14,10 +20,11 @@ class TimeframeScheduler:
     Manages when each timeframe should be scanned.
     Aligns scan times with candle close times for accuracy.
 
-    Example:
-    - 5m timeframe: scans at :00, :05, :10, :15, :20, etc.
-    - 15m timeframe: scans at :00, :15, :30, :45
-    - 1h timeframe: scans at :00 of each hour
+    Uses FIXED REFERENCE POINTS (same as AlignedCandleAggregator):
+    - 10m: reference 2025-10-24 17:10:00
+    - 20m: reference 2025-10-24 17:20:00
+    - 25m: reference 2025-10-24 17:05:00 (critical for 25m!)
+    - 40m: reference 2025-10-24 16:40:00
     """
 
     # Convert timeframe to minutes
@@ -28,7 +35,7 @@ class TimeframeScheduler:
         '10m': 10,   # Aggregated from 5m
         '15m': 15,
         '20m': 20,   # Aggregated from 5m
-        '25m': 25,   # Aggregated from 5m
+        '25m': 25,   # Aggregated from 5m - DOESN'T divide 24h!
         '30m': 30,
         '40m': 40,   # Aggregated from 5m
         '50m': 50,   # Aggregated from 5m
@@ -39,6 +46,15 @@ class TimeframeScheduler:
         '8h': 480,
         '12h': 720,
         '1d': 1440,
+    }
+    
+    # FIXED REFERENCE POINTS - Must match AlignedCandleAggregator.TIMEFRAME_REFERENCES
+    TIMEFRAME_REFERENCES = {
+        '10m': datetime(2025, 10, 24, 17, 10, 0),
+        '20m': datetime(2025, 10, 24, 17, 20, 0),
+        '25m': datetime(2025, 10, 24, 17, 5, 0),   # CRITICAL: Only for 25m!
+        '40m': datetime(2025, 10, 24, 16, 40, 0),
+        '50m': datetime(2025, 10, 20, 0, 0, 0),
     }
 
     def __init__(self, timeframes: List[str]):
@@ -63,21 +79,36 @@ class TimeframeScheduler:
     def get_next_candle_close_time(self, timeframe: str) -> datetime:
         """
         Calculate the next candle close time for a timeframe.
-
-        Examples:
-        - 5m at 18:29:45 → next close at 18:30:00
-        - 15m at 18:29:45 → next close at 18:30:00 (next 15m boundary)
-        - 1h at 18:29:45 → next close at 19:00:00
+        
+        Uses FIXED REFERENCE POINTS for custom timeframes (10m, 20m, 25m, 40m).
 
         Args:
-            timeframe: Timeframe (e.g., '5m')
+            timeframe: Timeframe (e.g., '5m', '25m')
 
         Returns:
             datetime object of next candle close time
         """
         minutes = self.TF_TO_MINUTES.get(timeframe, 60)
         now = datetime.now().replace(microsecond=0)
+        
+        # For custom aggregated timeframes, use reference point logic
+        if timeframe in self.TIMEFRAME_REFERENCES:
+            reference_time = self.TIMEFRAME_REFERENCES[timeframe]
+            
+            # Calculate how many periods since reference
+            diff_seconds = (now - reference_time).total_seconds()
+            diff_minutes = diff_seconds / 60
+            
+            # Find next period boundary
+            periods_elapsed = diff_minutes / minutes
+            next_period_index = int(periods_elapsed) + 1
+            
+            # Calculate next candle close
+            next_close = reference_time + timedelta(minutes=next_period_index * minutes)
+            
+            return next_close
 
+        # For native timeframes, use traditional logic
         if minutes < 60:
             # Minute-based timeframes (5m, 15m, 30m)
             # Find next boundary where minute % minutes == 0 and seconds == 0
@@ -134,12 +165,29 @@ class TimeframeScheduler:
         """
         Get previous candle close time for a timeframe.
         
-        FIXED: Calculate actual previous candle close based on current time,
-        not just next_close - interval.
+        Uses FIXED REFERENCE POINTS for custom timeframes.
         """
         minutes = self.TF_TO_MINUTES.get(timeframe, 60)
         now = datetime.now().replace(microsecond=0)
+        
+        # For custom aggregated timeframes, use reference point logic
+        if timeframe in self.TIMEFRAME_REFERENCES:
+            reference_time = self.TIMEFRAME_REFERENCES[timeframe]
+            
+            # Calculate how many periods since reference
+            diff_seconds = (now - reference_time).total_seconds()
+            diff_minutes = diff_seconds / 60
+            
+            # Find current/previous period boundary
+            periods_elapsed = diff_minutes / minutes
+            prev_period_index = int(periods_elapsed)
+            
+            # Calculate previous candle close
+            prev_close = reference_time + timedelta(minutes=prev_period_index * minutes)
+            
+            return prev_close
 
+        # For native timeframes, use traditional logic
         if minutes < 60:
             # Minute-based timeframes (5m, 15m, 30m)
             # Find the most recent boundary where minute % minutes == 0

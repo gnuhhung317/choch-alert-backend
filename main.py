@@ -76,7 +76,6 @@ class ChochAlertSystem:
             left=config.PIVOT_LEFT,
             right=config.PIVOT_RIGHT,
             keep_pivots=config.KEEP_PIVOTS,
-            use_variant_filter=config.USE_VARIANT_FILTER,
             allow_ph1=config.ALLOW_PH1,
             allow_ph2=config.ALLOW_PH2,
             allow_ph3=config.ALLOW_PH3,

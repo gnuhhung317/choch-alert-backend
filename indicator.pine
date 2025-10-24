@@ -1,5 +1,5 @@
 //@version=5
-indicator("Pivot Waves + 8-Pattern + CHoCH (pure pivot ver.)", overlay=true, max_lines_count=500, max_labels_count=500)
+indicator("Pivot Waves + 8-Pattern + CHoCH (upfate ver.)", overlay=true, max_lines_count=500, max_labels_count=500)
 
 // ========== Inputs ==========
 left        = input.int(1,  "Pivot Left",  minval=1)
@@ -12,18 +12,16 @@ plotPvtMark = input.bool(true, "Hiển thị PH/PL")
 plotEightLbl = input.bool(true, "Ghi nhãn P1..P8 gần nhất")
 showTable   = input.bool(true, "Bảng thông tin")
 
+// --- Variant filters (BẮT BUỘC - chỉ detect pivot có variant hợp lệ)
+allowPH1 = input.bool(true,  "Cho phép PH loại 1")
+allowPH2 = input.bool(true,  "Cho phép PH loại 2 (con là nến #1)")
+allowPH3 = input.bool(true,  "Cho phép PH loại 3 (biến thể khác)")
+allowPL1 = input.bool(true,  "Cho phép PL loại 1")
+allowPL2 = input.bool(true,  "Cho phép PL loại 2 (con là nến #1)")
+allowPL3 = input.bool(true,  "Cho phép PL loại 3 (biến thể khác)")
+showVariantLabel = input.bool(false, "Hiển thị mã biến thể trên chart")
+
 var bool chochLocked = false 
-
-// ========== Detect pivots (thuần ta.pivot*) ==========
-ph   = ta.pivothigh(high, left, right)
-pl   = ta.pivotlow(low,  left, right)
-isPH = not na(ph)
-isPL = not na(pl)
-
-// bar pivot nằm ở nến giữa (bar_index - right)
-newPivotBar   = (isPH or isPL) ? (bar_index - right) : na
-newPivotPrice = isPH ? ph : isPL ? pl : na
-newPivotHigh  = isPH
 
 // ========== Storage ==========
 var prices = array.new_float()
@@ -50,6 +48,113 @@ getPivotFromEnd(idxFromEnd) =>
 // Dung sai tick
 tol = syminfo.mintick * touchTicks
 
+// ========== Helpers cho phân loại biến thể ==========
+getHLTripletAroundMid() =>
+    // Timeline: [LEFT/h3] → [CENTER/h2/PIVOT] → [RIGHT/h1]
+    // Pine indexing: [right+1] → [right] → [right-1]
+    float h2 = high[right]      // CENTER (pivot bar)
+    float l2 = low[right]
+    float h3 = na               // LEFT side
+    float l3 = na
+    float h1 = na               // RIGHT side
+    float l1 = na
+    
+    if bar_index > right + 1
+        h3 := high[right + 1]   // LEFT side
+        l3 := low[right + 1]
+    if right - 1 >= 0
+        h1 := high[right - 1]   // RIGHT side
+        l1 := low[right - 1]
+    [h1,h2,h3,l1,l2,l3]
+
+isPH_type1() =>
+    [h1,h2,h3,l1,l2,l3] = getHLTripletAroundMid()
+    not na(h1) and not na(h3) and (h2 > h1 and h2 > h3) and (l2 > l1 and l2 > l3)
+
+isPH_type2() =>
+    [h1,h2,h3,l1,l2,l3] = getHLTripletAroundMid()
+    not na(h1) and not na(h3) and (h2 >= h1 and h2 > h3) and (l2 > l3 and l2 < l1)
+
+isPH_type3() =>
+    [h1,h2,h3,l1,l2,l3] = getHLTripletAroundMid()
+    not na(h1) and not na(h3) and (h2 > h1 and h2 >= h3) and (l2 < l3 and l2 > l1)
+
+isPL_type1() =>
+    [h1,h2,h3,l1,l2,l3] = getHLTripletAroundMid()
+    not na(h1) and not na(h3) and (l2 < l1 and l2 < l3) and (h2 < h1 and h2 < h3)
+
+isPL_type2() =>
+    [h1,h2,h3,l1,l2,l3] = getHLTripletAroundMid()
+    not na(h1) and not na(h3) and (h2 >= h1 and h2 < h3) and (l2 < l3 and l2 <= l1)
+
+isPL_type3() =>
+    [h1,h2,h3,l1,l2,l3] = getHLTripletAroundMid()
+    not na(h1) and not na(h3) and (l2 < l1 and l2 < l3) and (h2 < h1 and h2 > h3)
+
+classifyPivotVariant(isHighPivot) =>
+    var string t = "NA"
+    if isHighPivot
+        t := isPH_type1() ? "PH1" :
+             isPH_type2() ? "PH2" :
+             isPH_type3() ? "PH3" : "NA"
+    else
+        t := isPL_type1() ? "PL1" :
+             isPL_type2() ? "PL2" :
+             isPL_type3() ? "PL3" : "NA"
+    t
+
+allowedByUser(t) =>
+    switch t
+        "PH1" => allowPH1
+        "PH2" => allowPH2
+        "PH3" => allowPH3
+        "PL1" => allowPL1
+        "PL2" => allowPL2
+        "PL3" => allowPL3
+        => false
+
+// ========== Custom Pivot Detection (không dùng ta.pivot*) ==========
+// Detect pivot manually based on variant classification only
+var bool isPH = false
+var bool isPL = false
+var float newPivotPrice = na
+var int newPivotBar = na
+var bool newPivotHigh = false
+
+// Reset detection flags
+isPH := false
+isPL := false
+newPivotPrice := na
+newPivotBar := na
+
+// Chỉ check khi có đủ bars 2 bên
+if bar_index > right + 1 and right - 1 >= 0
+    // Check Pivot High variants
+    if isPH_type1() and allowPH1
+        isPH := true
+    else if isPH_type2() and allowPH2
+        isPH := true
+    else if isPH_type3() and allowPH3
+        isPH := true
+    
+    // Check Pivot Low variants
+    if isPL_type1() and allowPL1
+        isPL := true
+    else if isPL_type2() and allowPL2
+        isPL := true
+    else if isPL_type3() and allowPL3
+        isPL := true
+    
+    // Set pivot data if detected
+    if isPH
+        newPivotPrice := high[right]
+        newPivotBar := bar_index - right
+        newPivotHigh := true
+    else if isPL
+        newPivotPrice := low[right]
+        newPivotBar := bar_index - right
+        newPivotHigh := false
+
 // ========== State vars ==========
 var int   lastPivotBar   = na
 var float lastPivotPrice = na
@@ -65,46 +170,55 @@ acceptedPH_event := false
 acceptedPL_event := false
 
 if (isPH or isPL)
-    // --- chèn pivot giả nếu 2 pivot liên tiếp cùng loại (giữ nguyên cơ chế của bạn) ---
-    if pCount() > 0
-        [lastBar, lastPrice, lastHigh] = getPivotFromEnd(0)
-        newHigh = isPH
-        if lastHigh == newHigh
-            gap = newPivotBar - lastBar - 1
-            if gap > 0
-                firstBarInGap = lastBar + 1
-                lastBarInGap  = newPivotBar - 1
-                offsetFirst   = bar_index - firstBarInGap
-                offsetLast    = bar_index - lastBarInGap
-                if offsetFirst >= 0 and offsetLast >= 0
-                    float insertPrice = newHigh ? low[offsetFirst] : high[offsetFirst]
-                    int   insertBar   = firstBarInGap
-                    bool  insertHigh  = not newHigh
-                    for i = offsetFirst to offsetLast
-                        float candidate = newHigh ? low[i] : high[i]
-                        if (newHigh and candidate < insertPrice) or (not newHigh and candidate > insertPrice)
-                            insertPrice := candidate
-                            insertBar   := bar_index - i
-                    if insertBar > lastBar and insertBar < newPivotBar
-                        storePivot(insertBar, insertPrice, insertHigh)
-                        if drawWaves and not na(lastPivotBar)
-                            line.new(lastPivotBar, lastPivotPrice, insertBar, insertPrice, color=color.new(color.blue, 0), width=2)
-                        lastPivotBar   := insertBar
-                        lastPivotPrice := insertPrice
+    // ========== BẮT BUỘC lọc theo variant - KHÔNG detect pivot thuần ==========
+    tvar = classifyPivotVariant(isPH)
+    accept = (tvar != "NA") and allowedByUser(tvar)
 
-    // Lưu pivot mới
-    storePivot(newPivotBar, newPivotPrice, newPivotHigh)
-    if drawWaves and not na(lastPivotBar)
-        line.new(lastPivotBar, lastPivotPrice, newPivotBar, newPivotPrice, color=color.new(color.blue, 0), width=2)
-    lastPivotBar   := newPivotBar
-    lastPivotPrice := newPivotPrice
+    if accept
+        // --- chèn pivot giả nếu 2 pivot liên tiếp cùng loại (giữ nguyên cơ chế của bạn) ---
+        if pCount() > 0
+            [lastBar, lastPrice, lastHigh] = getPivotFromEnd(0)
+            newHigh = isPH
+            if lastHigh == newHigh
+                gap = newPivotBar - lastBar - 1
+                if gap > 0
+                    firstBarInGap = lastBar + 1
+                    lastBarInGap  = newPivotBar - 1
+                    offsetFirst   = bar_index - firstBarInGap
+                    offsetLast    = bar_index - lastBarInGap
+                    if offsetFirst >= 0 and offsetLast >= 0
+                        float insertPrice = newHigh ? low[offsetFirst] : high[offsetFirst]
+                        int   insertBar   = firstBarInGap
+                        bool  insertHigh  = not newHigh
+                        for i = offsetFirst to offsetLast
+                            float candidate = newHigh ? low[i] : high[i]
+                            if (newHigh and candidate < insertPrice) or (not newHigh and candidate > insertPrice)
+                                insertPrice := candidate
+                                insertBar   := bar_index - i
+                        if insertBar > lastBar and insertBar < newPivotBar
+                            storePivot(insertBar, insertPrice, insertHigh)
+                            if drawWaves and not na(lastPivotBar)
+                                line.new(lastPivotBar, lastPivotPrice, insertBar, insertPrice, color=color.new(color.blue, 0), width=2)
+                            lastPivotBar   := insertBar
+                            lastPivotPrice := insertPrice
 
-    // reset khóa CHoCH khi đã hình thành pivot sau cụm 8 trước đó
-    if not na(lastEightBarIdx) and newPivotBar > lastEightBarIdx
-        chochLocked := false
+        // Lưu pivot mới
+        storePivot(newPivotBar, newPivotPrice, newPivotHigh)
+        if drawWaves and not na(lastPivotBar)
+            line.new(lastPivotBar, lastPivotPrice, newPivotBar, newPivotPrice, color=color.new(color.blue, 0), width=2)
+        lastPivotBar   := newPivotBar
+        lastPivotPrice := newPivotPrice
 
-    acceptedPH_event := isPH
-    acceptedPL_event := isPL
+        // reset khóa CHoCH khi đã hình thành pivot sau cụm 8 trước đó
+        if not na(lastEightBarIdx) and newPivotBar > lastEightBarIdx
+            chochLocked := false
+
+        acceptedPH_event := isPH
+        acceptedPL_event := isPL
+
+        if showVariantLabel and tvar != "NA"
+            label.new(newPivotBar, newPivotPrice, tvar, style=label.style_label_center,
+                      textcolor=color.white, color=color.new(color.black, 10), size=size.tiny)
 
 // ========== 8-Pattern ==========
 var float pivot6 = na   // p6 (reference cho CHoCH)
@@ -140,8 +254,8 @@ if eightReady
     isLowest8  = p8 == array.min(lowsArr)
 
     // Ràng buộc thứ tự 8-pivot
-    upOrderOK   = (p2 < p4 and p4 < p6 and p6 < p8) and (p1 < p3 and p3 < p5 and p5 < p7)
-    downOrderOK = (p1 > p3 and p3 > p5 and p5 > p7) and (p2 > p4 and p4 > p6 and p6 > p8)
+    upOrderOK   = (p2 < p4 and p4 < p6 and p6 < p8) and ( p3 < p5 and p5 < p7)
+    downOrderOK = ( p3 > p5 and p5 > p7) and (p2 > p4 and p4 > p6 and p6 > p8)
 
     // Điều kiện breakout mới
     off5 = math.max(0, bar_index - b5)
@@ -158,8 +272,8 @@ if eightReady
     hi3 = high[off3]
     hi1 = high[off1]
     
-    upBreakout   = (lo5 > hi2) and (lo3 > lo1)
-    downBreakout = (hi5 < lo2) and (hi3 < hi1)
+    upBreakout   = (lo5 > hi2) 
+    downBreakout = (hi5 < lo2) 
 
     // Mẫu hợp lệ với điều kiện breakout phù hợp
     // Uptrend pattern + UP breakout conditions
@@ -182,19 +296,30 @@ var bool fireChochUp = false
 var bool fireChochDn = false
 
 if eightReady and not na(pivot6) and not na(pivot5)
-    // Điều kiện CHoCH cũ (nến-kề) — giữ nguyên
-    chochUpBar_old   = (low > low[1])   and (close > high[1])
-    chochDownBar_old = (high < high[1]) and (close < low[1])
+    // ========== 3-CANDLE CHoCH CONFIRMATION (matching Python logic) ==========
+    // Pre-CHoCH [2] → CHoCH Bar [1] → Confirmation [0]
+    
+    // CHoCH Bar conditions (nến [1] - previous bar)
+    // CHoCH Up: low[1] > low[2] AND close[1] > high[2] AND close[1] > pivot6 AND close[1] < pivot5
+    chochUpBar = (low[1] > low[2]) and (close[1] > high[2]) and 
+                 (close[1] > pivot6) and (close[1] < pivot5)
+    
+    // CHoCH Down: high[1] < high[2] AND close[1] < low[2] AND close[1] < pivot6 AND close[1] > pivot5
+    chochDownBar = (high[1] < high[2]) and (close[1] < low[2]) and 
+                   (close[1] < pivot6) and (close[1] > pivot5)
 
-    // BỔ SUNG logic mới với pivot5:
-    // CHoCH Up: close > pivot6 AND close < pivot5 (nằm giữa pivot6 và pivot5)
-    // CHoCH Down: close < pivot6 AND close > pivot5 (nằm giữa pivot5 và pivot6)
-    condUp   = lastEightDown and (close > (pivot6 + tol)) and (close < (pivot5 - tol))
-    condDown = lastEightUp   and (close < (pivot6 - tol)) and (close > (pivot5 + tol))
+    // Confirmation conditions (nến [0] - current bar)
+    // CHoCH Up confirmed: current low > high của nến pre-CHoCH [2]
+    confirmUp = (low > high[2])
+    
+    // CHoCH Down confirmed: current high < low của nến pre-CHoCH [2]
+    confirmDown = (high < low[2])
 
-    baseUp   = isAfterEight and chochUpBar_old   and condUp
-    baseDown = isAfterEight and chochDownBar_old and condDown
+    // Match with pattern direction
+    baseUp   = isAfterEight and lastEightDown and chochUpBar and confirmUp
+    baseDown = isAfterEight and lastEightUp   and chochDownBar and confirmDown
 
+    // Fire signal với locking
     fireChochUp := (not chochLocked) and baseUp
     fireChochDn := (not chochLocked) and baseDown
 
@@ -206,54 +331,3 @@ plotshape(fireChochUp,  title="CHoCH Up",   style=shape.labelup,   text="CH↑",
           color=color.new(color.teal, 0),   textcolor=color.white, location=location.belowbar, size=size.tiny)
 plotshape(fireChochDn,  title="CHoCH Down", style=shape.labeldown, text="CH↓",
           color=color.new(color.orange, 0), textcolor=color.white, location=location.abovebar, size=size.tiny)
-
-// ========== Labels P1-P8 ==========
-if plotEightLbl and eightReady
-    [b8_,p8_,h8_] = getPivotFromEnd(0)
-    [b7_,p7_,h7_] = getPivotFromEnd(1)
-    [b6_,p6_,h6_] = getPivotFromEnd(2)
-    [b5_,p5_,h5_] = getPivotFromEnd(3)
-    [b4_,p4_,h4_] = getPivotFromEnd(4)
-    [b3_,p3_,h3_] = getPivotFromEnd(5)
-    [b2_,p2_,h2_] = getPivotFromEnd(6)
-    [b1_,p1_,h1_] = getPivotFromEnd(7)
-    
-    // Hiển thị labels cho 8 pivot gần nhất
-    if barstate.islast
-        label.new(b1_, p1_, "P1", style=label.style_label_down, color=color.blue, textcolor=color.white, size=size.small)
-        label.new(b2_, p2_, "P2", style=label.style_label_up,   color=color.red,  textcolor=color.white, size=size.small)
-        label.new(b3_, p3_, "P3", style=label.style_label_down, color=color.blue, textcolor=color.white, size=size.small)
-        label.new(b4_, p4_, "P4", style=label.style_label_up,   color=color.red,  textcolor=color.white, size=size.small)
-        label.new(b5_, p5_, "P5", style=label.style_label_down, color=color.blue, textcolor=color.white, size=size.small)
-        label.new(b6_, p6_, "P6", style=label.style_label_up,   color=color.red,  textcolor=color.white, size=size.small)
-        label.new(b7_, p7_, "P7", style=label.style_label_down, color=color.blue, textcolor=color.white, size=size.small)
-        label.new(b8_, p8_, "P8", style=label.style_label_up,   color=color.red,  textcolor=color.white, size=size.small)
-
-// ========== Bảng thông tin ==========
-if showTable and barstate.islast
-    var table infoTable = table.new(position.top_right, 2, 11, bgcolor=color.white, border_width=1)
-    table.cell(infoTable, 0, 0, "8-Pattern Status", text_color=color.black, bgcolor=color.gray)
-    table.cell(infoTable, 1, 0, "", text_color=color.black)
-    
-    if eightReady
-        table.cell(infoTable, 0, 1, "Pattern", text_color=color.black)
-        patternStatus = lastEightUp ? "✓ Uptrend" : lastEightDown ? "✓ Downtrend" : "❌ Invalid"
-        patternColor = lastEightUp ? color.green : lastEightDown ? color.red : color.gray
-        table.cell(infoTable, 1, 1, patternStatus, text_color=patternColor)
-        
-        table.cell(infoTable, 0, 2, "Pivot Count", text_color=color.black)
-        table.cell(infoTable, 1, 2, str.tostring(pCount()), text_color=color.black)
-        
-        table.cell(infoTable, 0, 3, "Reference P6", text_color=color.black)
-        table.cell(infoTable, 1, 3, not na(pivot6) ? str.tostring(pivot6, "#.####") : "N/A", text_color=color.black)
-        
-        table.cell(infoTable, 0, 4, "Reference P5", text_color=color.black)
-        table.cell(infoTable, 1, 4, not na(pivot5) ? str.tostring(pivot5, "#.####") : "N/A", text_color=color.black)
-        
-        table.cell(infoTable, 0, 5, "CHoCH Locked", text_color=color.black)
-        lockStatus = chochLocked ? "🔒 Yes" : "🔓 No"
-        lockColor = chochLocked ? color.red : color.green
-        table.cell(infoTable, 1, 5, lockStatus, text_color=lockColor)
-    else
-        table.cell(infoTable, 0, 1, "Status", text_color=color.black)
-        table.cell(infoTable, 1, 1, "Need " + str.tostring(8 - pCount()) + " more pivots", text_color=color.orange)

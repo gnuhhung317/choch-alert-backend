@@ -9,6 +9,7 @@ from typing import Optional
 
 from data.binance_fetcher import BinanceFetcher
 from data.candle_aggregator import CandleAggregator
+from data.aligned_candle_aggregator import AlignedCandleAggregator
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,8 @@ class TimeframeAdapter:
             binance_fetcher: BinanceFetcher instance to wrap
         """
         self.fetcher = binance_fetcher
-        self.aggregator = CandleAggregator()
+        self.aggregator = CandleAggregator()  # Legacy aggregator (for fallback)
+        self.aligned_aggregator = AlignedCandleAggregator()  # New aligned aggregator
         
         logger.info(f"[TimeframeAdapter] Initialized with support for: {', '.join(self.AGGREGATION_MAP.keys())}")
     
@@ -107,23 +109,21 @@ class TimeframeAdapter:
             
             logger.debug(f"[TimeframeAdapter] Aggregating {len(df_base)} {base_tf} candles → {timeframe} ({target_minutes} minutes)")
             
-            # Aggregate candles
-            df_aggregated = self.aggregator.aggregate(
+            # Use AlignedCandleAggregator for accurate alignment
+            df_aggregated = AlignedCandleAggregator.aggregate(
                 df=df_base,
-                target_minutes=target_minutes,
+                target_timeframe=timeframe,
                 base_minutes=base_minutes
             )
             
-            # Validate aggregation
-            is_valid = self.aggregator.validate_aggregation(
-                df_base=df_base,
-                df_aggregated=df_aggregated,
-                target_minutes=target_minutes,
-                base_minutes=base_minutes
+            # Verify alignment
+            is_aligned = AlignedCandleAggregator.verify_alignment(
+                df=df_aggregated,
+                target_timeframe=timeframe
             )
             
-            if not is_valid:
-                logger.error(f"[TimeframeAdapter] Aggregation validation FAILED for {symbol} {timeframe}")
+            if not is_aligned:
+                logger.error(f"[TimeframeAdapter] Alignment verification FAILED for {symbol} {timeframe}")
             
             # Ensure we don't return more than requested limit
             if len(df_aggregated) > limit:
