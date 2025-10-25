@@ -135,6 +135,30 @@ function updateConnectionStatus(connected) {
     }
 }
 
+/**
+ * Convert UTC time to GMT+7 (Vietnam time)
+ */
+function convertToGMT7(utcTimeString) {
+    try {
+        // Parse the UTC time string
+        const utcDate = new Date(utcTimeString);
+        
+        // Add 7 hours for GMT+7
+        const gmt7Date = new Date(utcDate.getTime() + (7 * 60 * 60 * 1000));
+        
+        // Format as DD/MM HH:MM
+        const day = String(gmt7Date.getUTCDate()).padStart(2, '0');
+        const month = String(gmt7Date.getUTCMonth() + 1).padStart(2, '0');
+        const hours = String(gmt7Date.getUTCHours()).padStart(2, '0');
+        const minutes = String(gmt7Date.getUTCMinutes()).padStart(2, '0');
+        
+        return `${day}/${month} ${hours}:${minutes}`;
+    } catch (e) {
+        console.error('Error converting time:', e);
+        return utcTimeString;
+    }
+}
+
 function addAlertToTable(alert, animate = true, insertAtTop = true) {
     const row = document.createElement('tr');
     if (animate) {
@@ -147,15 +171,18 @@ function addAlertToTable(alert, animate = true, insertAtTop = true) {
     // Format price
     const price = alert.price ? `$${parseFloat(alert.price).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : 'N/A';
     
+    // Convert time to GMT+7
+    const timeGMT7 = convertToGMT7(alert.time_date);
+    
     row.innerHTML = `
-        <td>${alert.time_date}</td>
+        <td><small>${timeGMT7}</small></td>
         <td><strong>${alert.mã}</strong></td>
         <td><span class="timeframe-badge">${alert.khung}</span></td>
         <td><span class="${directionClass}">${alert.hướng}</span></td>
-        <td>${alert.loại}</td>
-        <td>${price}</td>
+        <td><small>${alert.loại}</small></td>
+        <td><small>${price}</small></td>
         <td><a href="${alert.tradingview_link}" target="_blank" class="tradingview-link">
-            <i class="fas fa-external-link-alt"></i> View Chart
+            <i class="fas fa-chart-line"></i>
         </a></td>
     `;
     

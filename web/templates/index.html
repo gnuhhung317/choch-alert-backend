@@ -15,39 +15,43 @@
         body {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
-            padding: 20px 0;
+            padding: 10px 0;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 14px;
         }
         
         .dashboard-container {
-            max-width: 1400px;
+            max-width: 100%;
             margin: 0 auto;
+            padding: 0 10px;
         }
         
         .header {
             background: white;
-            border-radius: 15px;
-            padding: 30px;
-            margin-bottom: 30px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
         }
         
         .header h1 {
             margin: 0;
             color: #333;
             font-weight: 700;
+            font-size: 1.3rem;
         }
         
         .header .subtitle {
             color: #666;
-            margin-top: 5px;
+            margin-top: 3px;
+            font-size: 0.8rem;
         }
         
         .status-badge {
             display: inline-block;
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-size: 14px;
+            padding: 3px 10px;
+            border-radius: 15px;
+            font-size: 11px;
             font-weight: 600;
         }
         
@@ -63,35 +67,39 @@
         
         .alerts-table-container {
             background: white;
-            border-radius: 15px;
-            padding: 30px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            overflow-x: auto;
         }
         
         .table-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
         }
         
         .table-header h2 {
             margin: 0;
             color: #333;
             font-weight: 600;
+            font-size: 1.1rem;
         }
         
         .alert-count {
             background: #667eea;
             color: white;
-            padding: 5px 15px;
-            border-radius: 20px;
+            padding: 3px 10px;
+            border-radius: 15px;
             font-weight: 600;
+            font-size: 11px;
         }
         
         .alerts-table {
             width: 100%;
             border-collapse: collapse;
+            font-size: 12px;
         }
         
         .alerts-table thead {
@@ -99,16 +107,19 @@
         }
         
         .alerts-table th {
-            padding: 15px;
+            padding: 8px 5px;
             text-align: left;
             font-weight: 600;
             color: #555;
             border-bottom: 2px solid #dee2e6;
+            font-size: 11px;
+            white-space: nowrap;
         }
         
         .alerts-table td {
-            padding: 15px;
+            padding: 8px 5px;
             border-bottom: 1px solid #dee2e6;
+            font-size: 11px;
         }
         
         .alerts-table tbody tr:hover {
@@ -118,45 +129,54 @@
         .direction-long {
             background: #10b981;
             color: white;
-            padding: 5px 12px;
-            border-radius: 5px;
+            padding: 3px 6px;
+            border-radius: 4px;
             font-weight: 600;
-            font-size: 13px;
+            font-size: 10px;
+            white-space: nowrap;
         }
         
         .direction-short {
             background: #ef4444;
             color: white;
-            padding: 5px 12px;
-            border-radius: 5px;
+            padding: 3px 6px;
+            border-radius: 4px;
             font-weight: 600;
-            font-size: 13px;
+            font-size: 10px;
+            white-space: nowrap;
         }
         
         .timeframe-badge {
             background: #6366f1;
             color: white;
-            padding: 5px 10px;
-            border-radius: 5px;
+            padding: 3px 6px;
+            border-radius: 4px;
             font-weight: 600;
-            font-size: 12px;
+            font-size: 10px;
+            white-space: nowrap;
         }
         
         .tradingview-link {
             color: #667eea;
             text-decoration: none;
             font-weight: 600;
+            font-size: 14px;
+            display: inline-block;
         }
         
         .tradingview-link:hover {
-            text-decoration: underline;
+            color: #5a67d8;
+        }
+        
+        .tradingview-link i {
+            font-size: inherit;
         }
         
         .no-alerts {
             text-align: center;
-            padding: 50px;
+            padding: 30px;
             color: #999;
-            font-size: 18px;
+            font-size: 14px;
         }
         
         .new-alert-animation {
@@ -170,51 +190,52 @@
         
         .loading {
             text-align: center;
-            padding: 50px;
+            padding: 30px;
             color: #666;
         }
         
         .spinner-border {
-            width: 3rem;
-            height: 3rem;
+            width: 2rem;
+            height: 2rem;
         }
         
-        /* Filter section styles */
+        /* Filter section styles - Mobile optimized */
         .filter-container {
             background: white;
-            border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 30px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
         }
         
         .filter-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
         }
         
         .filter-header h3 {
             margin: 0;
             color: #333;
             font-weight: 600;
+            font-size: 1rem;
         }
         
         .filter-toggle {
             background: #667eea;
             color: white;
             border: none;
-            padding: 8px 16px;
-            border-radius: 20px;
+            padding: 6px 12px;
+            border-radius: 15px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
+            font-size: 11px;
         }
         
         .filter-toggle:hover {
             background: #5a67d8;
-            transform: translateY(-1px);
         }
         
         .filter-content {
@@ -227,9 +248,21 @@
         
         .filter-row {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
+            grid-template-columns: 1fr;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        @media (min-width: 768px) {
+            .filter-row {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (min-width: 1024px) {
+            .filter-row {
+                grid-template-columns: repeat(4, 1fr);
+            }
         }
         
         .filter-group {
@@ -241,17 +274,16 @@
             font-weight: 600;
             color: #555;
             margin-bottom: 5px;
-            font-size: 14px;
+            font-size: 11px;
         }
         
         .filter-group select {
-            padding: 10px;
+            padding: 6px;
             border: 2px solid #e2e8f0;
-            border-radius: 8px;
+            border-radius: 6px;
             background: white;
-            font-size: 14px;
+            font-size: 11px;
             color: #333;
-            transition: border-color 0.3s ease;
         }
         
         .filter-group select:focus {
@@ -261,17 +293,17 @@
         
         .filter-actions {
             display: flex;
-            gap: 10px;
+            gap: 8px;
             justify-content: flex-end;
         }
         
         .filter-btn {
-            padding: 10px 20px;
+            padding: 6px 12px;
             border: none;
-            border-radius: 8px;
+            border-radius: 6px;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s ease;
+            font-size: 11px;
         }
         
         .filter-btn.apply {
@@ -279,58 +311,116 @@
             color: white;
         }
         
-        .filter-btn.apply:hover {
-            background: #059669;
-        }
-        
         .filter-btn.clear {
             background: #f3f4f6;
             color: #374151;
         }
         
-        .filter-btn.clear:hover {
-            background: #e5e7eb;
-        }
-        
         .active-filters {
-            margin-top: 15px;
+            margin-top: 10px;
             display: flex;
             flex-wrap: wrap;
-            gap: 8px;
+            gap: 5px;
         }
         
         .filter-tag {
             background: #667eea;
             color: white;
-            padding: 5px 12px;
-            border-radius: 15px;
-            font-size: 12px;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 10px;
             font-weight: 600;
             display: flex;
             align-items: center;
-            gap: 5px;
+            gap: 4px;
         }
         
         .filter-tag .remove {
             cursor: pointer;
             background: rgba(255, 255, 255, 0.2);
             border-radius: 50%;
-            width: 16px;
-            height: 16px;
+            width: 14px;
+            height: 14px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 10px;
         }
         
-        .filter-tag .remove:hover {
-            background: rgba(255, 255, 255, 0.3);
-        }
-        
         .filtered-count {
             color: #667eea;
             font-weight: 600;
-            margin-left: 10px;
+            margin-left: 5px;
+            font-size: 11px;
+        }
+        
+        /* Mobile optimizations */
+        @media (max-width: 768px) {
+            body {
+                font-size: 13px;
+                padding: 5px 0;
+            }
+            
+            .dashboard-container {
+                padding: 0 5px;
+            }
+            
+            .header {
+                padding: 12px;
+                margin-bottom: 10px;
+            }
+            
+            .header h1 {
+                font-size: 1.2rem;
+            }
+            
+            .header .subtitle {
+                font-size: 0.75rem;
+            }
+            
+            .alerts-table-container {
+                padding: 12px;
+            }
+            
+            .table-header h2 {
+                font-size: 1.05rem;
+            }
+            
+            .alerts-table th,
+            .alerts-table td {
+                padding: 6px 4px;
+                font-size: 11px;
+            }
+            
+            /* Hide icons in table headers and some cells on mobile, but NOT links */
+            .alerts-table th i {
+                display: none;
+            }
+            
+            .alerts-table td small i,
+            .alerts-table td strong i {
+                display: none;
+            }
+            
+            /* Keep link icons visible */
+            .tradingview-link i {
+                display: inline-block !important;
+            }
+            
+            .direction-long,
+            .direction-short {
+                font-size: 11px;
+                padding: 4px 7px;
+            }
+            
+            .timeframe-badge {
+                font-size: 11px;
+                padding: 4px 7px;
+            }
+            
+            .tradingview-link {
+                font-size: 16px;
+            }
         }
     </style>
 </head>
@@ -444,13 +534,13 @@
                 <table class="alerts-table">
                     <thead>
                         <tr>
-                            <th><i class="fas fa-clock"></i> Time</th>
-                            <th><i class="fas fa-coins"></i> Mã</th>
-                            <th><i class="fas fa-chart-bar"></i> Khung</th>
-                            <th><i class="fas fa-arrow-trend-up"></i> Hướng</th>
-                            <th><i class="fas fa-tag"></i> Loại Tín Hiệu</th>
-                            <th><i class="fas fa-dollar-sign"></i> Price</th>
-                            <th><i class="fas fa-external-link-alt"></i> Link</th>
+                            <th>Thời gian<br><small>(GMT+7)</small></th>
+                            <th>Mã</th>
+                            <th>Khung</th>
+                            <th>Hướng</th>
+                            <th>Loại</th>
+                            <th>Giá</th>
+                            <th>Link</th>
                         </tr>
                     </thead>
                     <tbody id="alertsTableBody">
