@@ -20,18 +20,16 @@ let allAlerts = [];
 let currentFilters = {
     symbols: [],
     timeframes: [],
-    patterns: [],
     directions: [],
-    signals: []
+    patterns: []
 };
 
 // Unique values for filter options
 let uniqueValues = {
     symbols: new Set(),
     timeframes: new Set(),
-    patterns: new Set(),
     directions: new Set(),
-    signals: new Set()
+    patterns: new Set()
 };
 
 // Request notification permission on page load
@@ -167,10 +165,10 @@ function addAlertToTable(alert, animate = true, insertAtTop = true) {
         row.className = 'new-alert-animation';
     }
     
-    // Determine direction class for pattern group badge
+    // Determine direction class for Long/Short badge
     const directionClass = alert.hướng === 'Long' ? 'direction-long' : 'direction-short';
     
-    // Pattern group badge (G1, G2, G3)
+    // Pattern group (G1, G2, G3) - plain text in "Nhóm" column
     const patternGroup = alert.nhóm || 'N/A';
     
     // Format price
@@ -183,8 +181,8 @@ function addAlertToTable(alert, animate = true, insertAtTop = true) {
         <td><small>${timeGMT7}</small></td>
         <td><strong>${alert.mã}</strong></td>
         <td><span class="timeframe-badge">${alert.khung}</span></td>
-        <td><span class="${directionClass}">${patternGroup}</span></td>
-        <td><small>${alert.loại}</small></td>
+        <td><span class="${directionClass}">${alert.hướng}</span></td>
+        <td><small>${patternGroup}</small></td>
         <td><small>${price}</small></td>
         <td><a href="${alert.tradingview_link}" target="_blank" class="tradingview-link">
             <i class="fas fa-chart-line"></i>
@@ -283,18 +281,14 @@ function updateFilterOptions(newAlerts) {
     newAlerts.forEach(alert => {
         uniqueValues.symbols.add(alert.mã || alert.symbol);
         uniqueValues.timeframes.add(alert.khung);
+        uniqueValues.directions.add(alert.hướng);
         if (alert.nhóm) {
             uniqueValues.patterns.add(alert.nhóm);
         }
-        uniqueValues.directions.add(alert.hướng);
-        uniqueValues.signals.add(alert.loại);
     });
     
     // Update symbol dropdown
     updateSelectOptions('symbolFilter', Array.from(uniqueValues.symbols).sort());
-    
-    // Update signal dropdown
-    updateSelectOptions('signalFilter', Array.from(uniqueValues.signals).sort());
 }
 
 function updateSelectOptions(selectId, options) {
@@ -331,13 +325,6 @@ function alertPassesFilters(alert) {
         }
     }
     
-    // Check pattern group filter
-    if (currentFilters.patterns.length > 0) {
-        if (!alert.nhóm || !currentFilters.patterns.includes(alert.nhóm)) {
-            return false;
-        }
-    }
-    
     // Check direction filter
     if (currentFilters.directions.length > 0) {
         if (!currentFilters.directions.includes(alert.hướng)) {
@@ -345,9 +332,9 @@ function alertPassesFilters(alert) {
         }
     }
     
-    // Check signal filter
-    if (currentFilters.signals.length > 0) {
-        if (!currentFilters.signals.includes(alert.loại)) {
+    // Check pattern group filter
+    if (currentFilters.patterns.length > 0) {
+        if (!alert.nhóm || !currentFilters.patterns.includes(alert.nhóm)) {
             return false;
         }
     }
@@ -359,9 +346,8 @@ function applyFilters() {
     // Get selected values from each filter
     currentFilters.symbols = getSelectedValues('symbolFilter');
     currentFilters.timeframes = getSelectedValues('timeframeFilter');
-    currentFilters.patterns = getSelectedValues('patternFilter');
     currentFilters.directions = getSelectedValues('directionFilter');
-    currentFilters.signals = getSelectedValues('signalFilter');
+    currentFilters.patterns = getSelectedValues('patternFilter');
     
     // Apply filters to all alerts
     const filteredAlerts = applyCurrentFilters(allAlerts);
@@ -389,13 +375,12 @@ function clearFilters() {
     currentFilters = {
         symbols: [],
         timeframes: [],
-        patterns: [],
         directions: [],
-        signals: []
+        patterns: []
     };
     
     // Clear all select values
-    ['symbolFilter', 'timeframeFilter', 'patternFilter', 'directionFilter', 'signalFilter'].forEach(id => {
+    ['symbolFilter', 'timeframeFilter', 'directionFilter', 'patternFilter'].forEach(id => {
         const select = document.getElementById(id);
         Array.from(select.options).forEach(option => option.selected = false);
     });
@@ -427,9 +412,8 @@ function updateActiveFiltersDisplay() {
     const filterTypes = [
         { key: 'symbols', label: 'Symbol', icon: 'fas fa-coins' },
         { key: 'timeframes', label: 'Timeframe', icon: 'fas fa-clock' },
-        { key: 'patterns', label: 'Pattern', icon: 'fas fa-shapes' },
         { key: 'directions', label: 'Direction', icon: 'fas fa-arrow-trend-up' },
-        { key: 'signals', label: 'Signal', icon: 'fas fa-tag' }
+        { key: 'patterns', label: 'Pattern', icon: 'fas fa-shapes' }
     ];
     
     filterTypes.forEach(filterType => {

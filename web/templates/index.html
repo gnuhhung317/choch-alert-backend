@@ -261,7 +261,7 @@
         
         @media (min-width: 1024px) {
             .filter-row {
-                grid-template-columns: repeat(4, 1fr);
+                grid-template-columns: repeat(3, 1fr);
             }
         }
         
@@ -483,18 +483,6 @@
                     </div>
                     
                     <div class="filter-group">
-                        <label for="patternFilter">
-                            <i class="fas fa-shapes"></i> Pattern Group
-                        </label>
-                        <select id="patternFilter" multiple>
-                            <option value="">All Patterns</option>
-                            <option value="G1">G1</option>
-                            <option value="G2">G2</option>
-                            <option value="G3">G3</option>
-                        </select>
-                    </div>
-                    
-                    <div class="filter-group">
                         <label for="directionFilter">
                             <i class="fas fa-arrow-trend-up"></i> Direction
                         </label>
@@ -506,11 +494,14 @@
                     </div>
                     
                     <div class="filter-group">
-                        <label for="signalFilter">
-                            <i class="fas fa-tag"></i> Signal Type
+                        <label for="patternFilter">
+                            <i class="fas fa-shapes"></i> Nhóm Pattern
                         </label>
-                        <select id="signalFilter" multiple>
-                            <option value="">All Signals</option>
+                        <select id="patternFilter" multiple>
+                            <option value="">All Groups</option>
+                            <option value="G1">G1</option>
+                            <option value="G2">G2</option>
+                            <option value="G3">G3</option>
                         </select>
                     </div>
                 </div>
@@ -549,8 +540,8 @@
                             <th>Thời gian<br><small>(GMT+7)</small></th>
                             <th>Mã</th>
                             <th>Khung</th>
+                            <th>Hướng</th>
                             <th>Nhóm</th>
-                            <th>Loại</th>
                             <th>Giá</th>
                             <th>Link</th>
                         </tr>
