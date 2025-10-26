@@ -253,9 +253,26 @@ if eightReady
     isHighest8 = p8 == array.max(highsArr)
     isLowest8  = p8 == array.min(lowsArr)
 
-    // Ràng buộc thứ tự 8-pivot
-    upOrderOK   = (p2 < p4 and p4 < p6 and p6 < p8) and ( p3 < p5 and p5 < p7)
-    downOrderOK = ( p3 > p5 and p5 > p7) and (p2 > p4 and p4 > p6 and p6 > p8)
+    // Ràng buộc thứ tự 8-pivot - 3 nhóm (G1, G2, G3)
+    // G1 (Original):
+    g1_upOrder   = (p2 < p4 and p4 < p6 and p6 < p8) and (p3 < p5 and p5 < p7)
+    g1_downOrder = (p3 > p5 and p5 > p7) and (p2 > p4 and p4 > p6 and p6 > p8)
+    
+    // G2:
+    // Uptrend: p3 < p7 < p5, p2 < p6 < p4 < p8, p2 < p5
+    g2_upOrder   = (p3 < p7 and p7 < p5) and (p2 < p6 and p6 < p4 and p4 < p8) and (p2 < p5)
+    // Downtrend: p3 > p7 > p5, p2 > p6 > p4 > p8, p2 > p5
+    g2_downOrder = (p3 > p7 and p7 > p5) and (p2 > p6 and p6 > p4 and p4 > p8) and (p2 > p5)
+    
+    // G3:
+    // Uptrend: p3 < p5 < p7, p2 < p6 < p4 < p8, p2 < p5
+    g3_upOrder   = (p3 < p5 and p5 < p7) and (p2 < p6 and p6 < p4 and p4 < p8) and (p2 < p5)
+    // Downtrend: p3 > p5 > p7, p2 > p6 > p4 > p8, p2 > p5
+    g3_downOrder = (p3 > p5 and p5 > p7) and (p2 > p6 and p6 > p4 and p4 > p8) and (p2 > p5)
+    
+    // Combined order check (bất kỳ nhóm nào hợp lệ)
+    upOrderOK   = g1_upOrder or g2_upOrder or g3_upOrder
+    downOrderOK = g1_downOrder or g2_downOrder or g3_downOrder
 
     // Điều kiện breakout mới
     off5 = math.max(0, bar_index - b5)

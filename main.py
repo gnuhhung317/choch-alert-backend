@@ -201,7 +201,8 @@ class ChochAlertSystem:
                     signal_type=result.get('signal_type', 'CHoCH'),
                     direction=result.get('direction', 'Long'),
                     price=result.get('price', df['close'].iloc[-2]),  # CHoCH price
-                    timestamp=result.get('timestamp', choch_idx)  # CHoCH candle time (not current time)
+                    timestamp=result.get('timestamp', choch_idx),  # CHoCH candle time (not current time)
+                    pattern_group=result.get('pattern_group')  # G1, G2, or G3
                 )
                 
                 # Add TradingView link to alert

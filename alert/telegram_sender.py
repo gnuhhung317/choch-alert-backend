@@ -137,7 +137,8 @@ class TelegramSender:
 
 
 def create_alert_data(symbol: str, timeframe: str, signal_type: str, 
-                     direction: str, price: float, timestamp: datetime) -> Dict:
+                     direction: str, price: float, timestamp: datetime,
+                     pattern_group: str = None) -> Dict:
     """
     Create alert data dictionary
     
@@ -148,6 +149,7 @@ def create_alert_data(symbol: str, timeframe: str, signal_type: str,
         direction: Direction ('Long' or 'Short')
         price: Current price
         timestamp: Signal timestamp
+        pattern_group: Pattern group (G1, G2, G3)
     
     Returns:
         Alert data dictionary with TradingView link
@@ -166,6 +168,7 @@ def create_alert_data(symbol: str, timeframe: str, signal_type: str,
         'mã': symbol,
         'khung': timeframe,
         'hướng': direction,  # Should be 'Long' or 'Short'
+        'nhóm': pattern_group,  # Pattern group (G1, G2, G3)
         'loại': signal_type,
         'price': price,
         'tradingview_link': tv_link

@@ -27,6 +27,7 @@ class Alert(Base):
     # Signal information
     signal_type = Column(String(50), nullable=False)  # CHoCH Up, CHoCH Down, etc.
     direction = Column(String(10), nullable=False, index=True)  # Long, Short
+    pattern_group = Column(String(10), nullable=True, index=True)  # G1, G2, G3
     price = Column(Float, nullable=False)  # Current price when signal occurred
     
     # Timestamps
@@ -47,6 +48,7 @@ class Alert(Base):
     def __repr__(self):
         return (f"<Alert(id={self.id}, symbol='{self.symbol}', "
                 f"timeframe='{self.timeframe}', direction='{self.direction}', "
+                f"pattern='{self.pattern_group}', "
                 f"price={self.price}, timestamp='{self.signal_timestamp}')>")
     
     def to_dict(self):
@@ -63,6 +65,7 @@ class Alert(Base):
             'mã': self.symbol,  # Vietnamese alias
             'khung': self.timeframe,  # Vietnamese for timeframe
             'hướng': self.direction,  # Vietnamese for direction
+            'nhóm': self.pattern_group,  # Vietnamese for pattern group
             'loại': self.signal_type,  # Vietnamese for signal type
             'price': self.price,
             'tradingview_link': self.tradingview_link,
@@ -99,6 +102,7 @@ class Alert(Base):
             timeframe=alert_data.get('khung', ''),
             signal_type=alert_data.get('loại', ''),
             direction=alert_data.get('hướng', ''),
+            pattern_group=alert_data.get('nhóm'),  # Pattern group
             price=float(alert_data.get('price', 0)),
             signal_timestamp=signal_timestamp,
             tradingview_link=alert_data.get('tradingview_link', ''),
@@ -123,6 +127,7 @@ class AlertArchive(Base):
     timeframe = Column(String(10), nullable=False, index=True)
     signal_type = Column(String(50), nullable=False)
     direction = Column(String(10), nullable=False, index=True)
+    pattern_group = Column(String(10), nullable=True, index=True)  # G1, G2, G3
     price = Column(Float, nullable=False)
     signal_timestamp = Column(DateTime, nullable=False, index=True)
     created_at = Column(DateTime, nullable=False)

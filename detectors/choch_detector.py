@@ -32,6 +32,7 @@ class TimeframeState:
         self.last_eight_bar_idx: Optional[int] = None
         self.pivot5: Optional[float] = None  # Pivot 5 for additional CHoCH condition
         self.pivot6: Optional[float] = None  # Changed from pivot4 to pivot6 for 8-pivot pattern
+        self.pattern_group: Optional[str] = None  # Store which group (G1, G2, G3) matched
         self.choch_locked = False
         self.choch_bar_idx: Optional[int] = None  # Bar where CHoCH triggered
         self.choch_price: Optional[float] = None  # Price where CHoCH triggered
@@ -62,6 +63,7 @@ class TimeframeState:
         self.last_eight_bar_idx = None
         self.pivot5 = None
         self.pivot6 = None
+        self.pattern_group = None
         self.choch_locked = False
         self.choch_bar_idx = None
         self.choch_price = None
@@ -384,14 +386,14 @@ class ChochDetector:
                 state.pivot6 = p6  # Reference pivot for CHoCH (was p4 in 6-pivot pattern)
                 state.last_eight_bar_idx = b8
                 
-                # Determine which group matched
+                # Determine which group matched and store it
                 if state.last_eight_up:
-                    group = "G1" if g1_up_order else ("G2" if g2_up_order else "G3")
-                    logger.info(f"[8-PIVOT-{group}] ✓✓✓ VALID UPTREND PATTERN: P1:{p1:.6f}(L) -> P2:{p2:.6f}(H) -> P3:{p3:.6f}(L) -> P4:{p4:.6f}(H) -> P5:{p5:.6f}(L) -> P6:{p6:.6f}(H) -> P7:{p7:.6f}(L-retest P4) -> P8:{p8:.6f}(H)")
+                    state.pattern_group = "G1" if g1_up_order else ("G2" if g2_up_order else "G3")
+                    logger.info(f"[8-PIVOT-{state.pattern_group}] ✓✓✓ VALID UPTREND PATTERN: P1:{p1:.6f}(L) -> P2:{p2:.6f}(H) -> P3:{p3:.6f}(L) -> P4:{p4:.6f}(H) -> P5:{p5:.6f}(L) -> P6:{p6:.6f}(H) -> P7:{p7:.6f}(L-retest P4) -> P8:{p8:.6f}(H)")
                     logger.info(f"   Breakout UP: low[5]({lo5:.6f}) > high[2]({hi2:.6f}) = {lo5 > hi2}")
                 else:
-                    group = "G1" if g1_down_order else ("G2" if g2_down_order else "G3")
-                    logger.info(f"[8-PIVOT-{group}] ✓✓✓ VALID DOWNTREND PATTERN: P1:{p1:.6f}(H) -> P2:{p2:.6f}(L) -> P3:{p3:.6f}(H) -> P4:{p4:.6f}(L) -> P5:{p5:.6f}(H) -> P6:{p6:.6f}(L) -> P7:{p7:.6f}(H-retest P4) -> P8:{p8:.6f}(L)")
+                    state.pattern_group = "G1" if g1_down_order else ("G2" if g2_down_order else "G3")
+                    logger.info(f"[8-PIVOT-{state.pattern_group}] ✓✓✓ VALID DOWNTREND PATTERN: P1:{p1:.6f}(H) -> P2:{p2:.6f}(L) -> P3:{p3:.6f}(H) -> P4:{p4:.6f}(L) -> P5:{p5:.6f}(H) -> P6:{p6:.6f}(L) -> P7:{p7:.6f}(H-retest P4) -> P8:{p8:.6f}(L)")
                     logger.info(f"   Breakout DOWN: high[5]({hi5:.6f}) < low[2]({lo2:.6f}) = {hi5 < lo2}")
                 
                 return True
@@ -576,6 +578,7 @@ class ChochDetector:
             result['choch_down'] = fire_down
             result['signal_type'] = 'CHoCH Up' if fire_up else 'CHoCH Down'
             result['direction'] = 'Long' if fire_up else 'Short'
+            result['pattern_group'] = state.pattern_group  # Add pattern group info
             # Use CHoCH price and timestamp (đã đóng)
             result['price'] = state.choch_price
             result['timestamp'] = current_idx
