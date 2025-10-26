@@ -160,19 +160,19 @@ def broadcast_alert(alert_data: Dict):
             # Convert to dict format for broadcasting
             alert_dict = saved_alert.to_dict()
             
-            # Broadcast to all clients
-            socketio.emit('alert', alert_dict, broadcast=True)
+            # Broadcast to all clients (use namespace='/' instead of broadcast=True for external calls)
+            socketio.emit('alert', alert_dict, namespace='/')
             logger.info(f"📡 Broadcasted alert: {alert_data.get('loại')} on {alert_data.get('khung')} - Saved to DB with ID {saved_alert.id}")
         else:
             # Fallback: broadcast original data even if DB save failed
-            socketio.emit('alert', alert_data, broadcast=True)
+            socketio.emit('alert', alert_data, namespace='/')
             logger.warning(f"📡 Broadcasted alert without DB save: {alert_data.get('loại')} on {alert_data.get('khung')}")
     
     except Exception as e:
         logger.error(f"Error broadcasting alert: {e}")
         # Try to broadcast anyway
         try:
-            socketio.emit('alert', alert_data, broadcast=True)
+            socketio.emit('alert', alert_data, namespace='/')
         except Exception as e2:
             logger.error(f"Failed to broadcast alert at all: {e2}")
 
