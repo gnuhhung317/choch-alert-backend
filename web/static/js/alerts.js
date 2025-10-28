@@ -53,8 +53,8 @@ socket.on('connect', () => {
     console.log('✅ Connected to server');
     updateConnectionStatus(true);
     
-    // Request alert history
-    socket.emit('request_history');
+    // Load initial alerts from API (not socket)
+    loadAlertsFromAPI();
 });
 
 // Connection lost
@@ -63,45 +63,7 @@ socket.on('disconnect', () => {
     updateConnectionStatus(false);
 });
 
-// Receive alert history
-socket.on('alerts_history', (alerts) => {
-    console.log(`📊 Received ${alerts.length} alerts from history`);
-    
-    // Store all alerts
-    allAlerts = [...alerts];
-    
-    // Clear loading message
-    alertsTableBody.innerHTML = '';
-    
-    if (alerts.length === 0) {
-        showNoAlerts();
-        hidePagination();
-    } else {
-        // Update filter options with new data
-        updateFilterOptions(alerts);
-        
-        // Apply current filters and setup pagination
-        filteredAlerts = applyCurrentFilters(alerts);
-        currentPage = 1;
-        totalPages = Math.ceil(filteredAlerts.length / itemsPerPage);
-        
-        // Display first page
-        displayCurrentPage();
-        
-        // Update counts
-        totalAlerts = alerts.length;
-        updateAlertCount(filteredAlerts.length);
-        
-        // Show/hide pagination
-        if (filteredAlerts.length > itemsPerPage) {
-            showPagination();
-        } else {
-            hidePagination();
-        }
-    }
-});
-
-// Receive new alert
+// Receive new alert (real-time)
 socket.on('alert', (data) => {
     console.log('🚨 New alert received:', data);
     
@@ -155,6 +117,59 @@ socket.on('alert', (data) => {
 /**
  * Helper functions
  */
+
+async function loadAlertsFromAPI(limit = 500) {
+    try {
+        console.log(`📥 Loading alerts from API (limit: ${limit})...`);
+        
+        const response = await fetch(`/api/alerts?limit=${limit}`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        const alerts = data.alerts || [];
+        
+        console.log(`📊 Loaded ${alerts.length} alerts from API`);
+        
+        // Store all alerts
+        allAlerts = [...alerts];
+        
+        // Clear loading message
+        alertsTableBody.innerHTML = '';
+        
+        if (alerts.length === 0) {
+            showNoAlerts();
+            hidePagination();
+        } else {
+            // Update filter options with new data
+            updateFilterOptions(alerts);
+            
+            // Apply current filters and setup pagination
+            filteredAlerts = applyCurrentFilters(alerts);
+            currentPage = 1;
+            totalPages = Math.ceil(filteredAlerts.length / itemsPerPage);
+            
+            // Display first page
+            displayCurrentPage();
+            
+            // Update counts
+            totalAlerts = alerts.length;
+            updateAlertCount(filteredAlerts.length);
+            
+            // Show/hide pagination
+            if (filteredAlerts.length > itemsPerPage) {
+                showPagination();
+            } else {
+                hidePagination();
+            }
+        }
+    } catch (error) {
+        console.error('❌ Error loading alerts from API:', error);
+        showNoAlerts();
+        hidePagination();
+    }
+}
 
 function updateConnectionStatus(connected) {
     if (connected) {

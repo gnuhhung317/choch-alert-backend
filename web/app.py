@@ -32,6 +32,8 @@ db = get_database('data/choch_alerts.db')
 
 # Maximum alerts per page
 MAX_ALERTS_PER_PAGE = 50
+# Maximum alerts to fetch from API
+MAX_ALERTS_FETCH = 500
 
 # GMT+7 timezone
 GMT7 = pytz.timezone('Asia/Bangkok')
@@ -62,8 +64,8 @@ def health():
 def get_alerts():
     """API endpoint to get alerts with filtering"""
     try:
-        # Get query parameters - Max 50 per page
-        limit = min(int(request.args.get('limit', MAX_ALERTS_PER_PAGE)), MAX_ALERTS_PER_PAGE)
+        # Get query parameters - Max 500 for initial load, 50 per page for display
+        limit = min(int(request.args.get('limit', MAX_ALERTS_PER_PAGE)), MAX_ALERTS_FETCH)
         offset = int(request.args.get('offset', 0))
         
         # Filter parameters
