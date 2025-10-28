@@ -22,13 +22,13 @@ const itemsPerPage = 50;
 let totalPages = 1;
 let filteredAlerts = [];
 
-// Current filters
+// Current filters - Default to today's alerts
 let currentFilters = {
     symbols: [],
     timeframes: [],
     directions: [],
     patterns: [],
-    date: ''
+    date: 'today'  // Default to today
 };
 
 // Unique values for filter options
@@ -122,7 +122,16 @@ async function loadAlertsFromAPI(limit = 500) {
     try {
         console.log(`📥 Loading alerts from API (limit: ${limit})...`);
         
-        const response = await fetch(`/api/alerts?limit=${limit}`);
+        // Build query parameters - include date filter by default
+        const params = new URLSearchParams();
+        params.append('limit', limit);
+        
+        // Apply date filter (default is 'today')
+        if (currentFilters.date) {
+            params.append('date_filter', currentFilters.date);
+        }
+        
+        const response = await fetch(`/api/alerts?${params.toString()}`);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -163,6 +172,9 @@ async function loadAlertsFromAPI(limit = 500) {
             } else {
                 hidePagination();
             }
+            
+            // Show active filters display
+            updateActiveFiltersDisplay();
         }
     } catch (error) {
         console.error('❌ Error loading alerts from API:', error);
