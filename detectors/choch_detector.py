@@ -409,6 +409,16 @@ class ChochDetector:
         
         IMPORTANT: Tất cả nến (pre-CHoCH, CHoCH, confirmation) đều phải đã ĐÓNG
         
+        Pattern Group Specific Conditions (added on confirmation candle):
+        - Downtrend → CHoCH Up:
+          * G1: Close_CF <= HIGH_5
+          * G2: Close_CF <= HIGH_7
+          * G3: Close_CF <= HIGH_5
+        - Uptrend → CHoCH Down:
+          * G1: Close_CF >= LOW_5
+          * G2: Close_CF >= LOW_7
+          * G3: Close_CF >= LOW_5
+        
         Returns: (fire_choch_up, fire_choch_down)
         """
         if state.pivot_count() < 8:
@@ -439,6 +449,19 @@ class ChochDetector:
         except (KeyError, IndexError):
             return False, False
 
+        # Get pivot prices for pattern group conditions
+        if state.pivot_count() < 8:
+            return False, False
+            
+        b8, p8, h8 = state.get_pivot_from_end(0)
+        b7, p7, h7 = state.get_pivot_from_end(1)
+        b6, p6, h6 = state.get_pivot_from_end(2)
+        b5, p5, h5 = state.get_pivot_from_end(3)
+        b4, p4, h4 = state.get_pivot_from_end(4)
+        b3, p3, h3 = state.get_pivot_from_end(5)
+        b2, p2, h2 = state.get_pivot_from_end(6)
+        b1, p1, h1 = state.get_pivot_from_end(7)
+
         # CHoCH conditions on previous bar (nến CHoCH - ĐÃ ĐÓNG)
         # CHoCH Up: low[prev] > low[pre_prev] AND close[prev] > high[pre_prev] AND close[prev] > pivot6 AND close[prev] < pivot5
         choch_up_bar = (prev['low'] > pre_prev['low'] and 
@@ -458,10 +481,38 @@ class ChochDetector:
 
         # Confirmation conditions (TẤT CẢ ĐỀU ĐÃ ĐÓNG):
         # CHoCH Up: current bar low > high của nến trước CHoCH (pre_prev)
-        confirm_up = base_up and (current['low'] > pre_prev['high'])
+        confirm_up_basic = base_up and (current['low'] > pre_prev['high'])
         
         # CHoCH Down: current bar high < low của nến trước CHoCH (pre_prev)  
-        confirm_down = base_down and (current['high'] < pre_prev['low'])
+        confirm_down_basic = base_down and (current['high'] < pre_prev['low'])
+
+        # Pattern Group Specific Conditions for confirmation candle
+        confirm_up = False
+        confirm_down = False
+        
+        if confirm_up_basic and state.pattern_group:
+            # Downtrend → CHoCH Up
+            if state.pattern_group == "G1":
+                # G1: Close_CF <= HIGH_5
+                confirm_up = current['close'] <= p5
+            elif state.pattern_group == "G2":
+                # G2: Close_CF <= HIGH_7
+                confirm_up = current['close'] <= p7
+            elif state.pattern_group == "G3":
+                # G3: Close_CF <= HIGH_5
+                confirm_up = current['close'] <= p5
+        
+        if confirm_down_basic and state.pattern_group:
+            # Uptrend → CHoCH Down
+            if state.pattern_group == "G1":
+                # G1: Close_CF >= LOW_5
+                confirm_down = current['close'] >= p5
+            elif state.pattern_group == "G2":
+                # G2: Close_CF >= LOW_7
+                confirm_down = current['close'] >= p7
+            elif state.pattern_group == "G3":
+                # G3: Close_CF >= LOW_5
+                confirm_down = current['close'] >= p5
 
         # Fire signal nếu có confirmation và chưa lock
         if not state.choch_locked and (confirm_up or confirm_down):
@@ -472,7 +523,14 @@ class ChochDetector:
             fire_choch_up = confirm_up
             fire_choch_down = confirm_down
             
-            logger.info(f"[CHoCH] ✅ CONFIRMED: {'UP' if confirm_up else 'DOWN'} @ {prev['close']:.6f} (ALL CLOSED CANDLES)")
+            # Log pattern group condition
+            if confirm_up:
+                ref_pivot = p7 if state.pattern_group == "G2" else p5
+                logger.info(f"[CHoCH-{state.pattern_group}] ✅ CONFIRMED UP @ {prev['close']:.6f} (Close_CF {current['close']:.6f} <= P{'7' if state.pattern_group == 'G2' else '5'} {ref_pivot:.6f})")
+            else:
+                ref_pivot = p7 if state.pattern_group == "G2" else p5
+                logger.info(f"[CHoCH-{state.pattern_group}] ✅ CONFIRMED DOWN @ {prev['close']:.6f} (Close_CF {current['close']:.6f} >= P{'7' if state.pattern_group == 'G2' else '5'} {ref_pivot:.6f})")
+            
             logger.info(f"   CHoCH bar: {prev_idx} (O:{prev['open']}, H:{prev['high']}, L:{prev['low']}, C:{prev['close']}) [CLOSED]")
             logger.info(f"   Pre-CHoCH: {pre_prev_idx} (O:{pre_prev['open']}, H:{pre_prev['high']}, L:{pre_prev['low']}, C:{pre_prev['close']}) [CLOSED]")
             logger.info(f"   Confirm bar: {current_idx} (O:{current['open']}, H:{current['high']}, L:{current['low']}, C:{current['close']}) [CLOSED]")

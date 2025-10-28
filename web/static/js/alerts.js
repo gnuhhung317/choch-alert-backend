@@ -16,12 +16,19 @@ let totalAlerts = 0;
 // All alerts data (unfiltered)
 let allAlerts = [];
 
+// Pagination state
+let currentPage = 1;
+const itemsPerPage = 50;
+let totalPages = 1;
+let filteredAlerts = [];
+
 // Current filters
 let currentFilters = {
     symbols: [],
     timeframes: [],
     directions: [],
-    patterns: []
+    patterns: [],
+    date: ''
 };
 
 // Unique values for filter options
@@ -68,18 +75,29 @@ socket.on('alerts_history', (alerts) => {
     
     if (alerts.length === 0) {
         showNoAlerts();
+        hidePagination();
     } else {
         // Update filter options with new data
         updateFilterOptions(alerts);
         
-        // Apply current filters
-        const filteredAlerts = applyCurrentFilters(alerts);
+        // Apply current filters and setup pagination
+        filteredAlerts = applyCurrentFilters(alerts);
+        currentPage = 1;
+        totalPages = Math.ceil(filteredAlerts.length / itemsPerPage);
         
-        // Display filtered alerts (already sorted by timestamp DESC from backend)
-        // Add alerts in order without inserting at top since backend already sorts DESC
-        filteredAlerts.forEach(alert => addAlertToTable(alert, false, false));
+        // Display first page
+        displayCurrentPage();
+        
+        // Update counts
         totalAlerts = alerts.length;
         updateAlertCount(filteredAlerts.length);
+        
+        // Show/hide pagination
+        if (filteredAlerts.length > itemsPerPage) {
+            showPagination();
+        } else {
+            hidePagination();
+        }
     }
 });
 
@@ -87,12 +105,12 @@ socket.on('alerts_history', (alerts) => {
 socket.on('alert', (data) => {
     console.log('🚨 New alert received:', data);
     
-    // Add to all alerts array
+    // Add to all alerts array at the beginning
     allAlerts.unshift(data);
     
-    // Keep only last 100 alerts
-    if (allAlerts.length > 100) {
-        allAlerts = allAlerts.slice(0, 100);
+    // Keep only last 1000 alerts in memory
+    if (allAlerts.length > 1000) {
+        allAlerts = allAlerts.slice(0, 1000);
     }
     
     // Update filter options
@@ -100,21 +118,34 @@ socket.on('alert', (data) => {
     
     // Check if alert passes current filters
     if (alertPassesFilters(data)) {
-        // Remove "no alerts" message if exists
-        if (alertsTableBody.querySelector('.no-alerts')) {
-            alertsTableBody.innerHTML = '';
-        }
+        // Add to filtered alerts at the beginning
+        filteredAlerts.unshift(data);
         
-        // Add to table with animation (insert at top for real-time)
-        addAlertToTable(data, true, true);
+        // Recalculate pagination
+        totalPages = Math.ceil(filteredAlerts.length / itemsPerPage);
+        
+        // If we're on page 1, add the new alert to the display
+        if (currentPage === 1) {
+            // Remove "no alerts" message if exists
+            if (alertsTableBody.querySelector('.no-alerts')) {
+                alertsTableBody.innerHTML = '';
+            }
+            
+            // Refresh current page to include new alert
+            displayCurrentPage();
+        }
         
         // Show browser notification
         showNotification(data);
+        
+        // Update pagination display
+        if (filteredAlerts.length > itemsPerPage) {
+            showPagination();
+        }
     }
     
     // Update counter
     totalAlerts++;
-    const filteredAlerts = applyCurrentFilters(allAlerts);
     updateAlertCount(filteredAlerts.length);
     
     // Play sound (optional)
@@ -136,30 +167,43 @@ function updateConnectionStatus(connected) {
 }
 
 /**
- * Convert UTC time to GMT+7 (Vietnam time)
+ * Format time that's already in GMT+7 from backend
  */
-function convertToGMT7(utcTimeString) {
+function formatTime(timeString) {
     try {
-        // Parse the UTC time string
-        const utcDate = new Date(utcTimeString);
-        
-        // Add 7 hours for GMT+7
-        const gmt7Date = new Date(utcDate.getTime() + (7 * 60 * 60 * 1000));
+        // Backend now sends GMT+7 time
+        const date = new Date(timeString);
         
         // Format as DD/MM HH:MM
-        const day = String(gmt7Date.getUTCDate()).padStart(2, '0');
-        const month = String(gmt7Date.getUTCMonth() + 1).padStart(2, '0');
-        const hours = String(gmt7Date.getUTCHours()).padStart(2, '0');
-        const minutes = String(gmt7Date.getUTCMinutes()).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
         
         return `${day}/${month} ${hours}:${minutes}`;
     } catch (e) {
-        console.error('Error converting time:', e);
-        return utcTimeString;
+        console.error('Error formatting time:', e);
+        return timeString;
     }
 }
 
-function addAlertToTable(alert, animate = true, insertAtTop = true) {
+/**
+ * Check if alert is from today (GMT+7)
+ */
+function isToday(timeString) {
+    try {
+        const date = new Date(timeString);
+        const today = new Date();
+        
+        return date.getDate() === today.getDate() &&
+               date.getMonth() === today.getMonth() &&
+               date.getFullYear() === today.getFullYear();
+    } catch (e) {
+        return false;
+    }
+}
+
+function addAlertToTable(alert, animate = true, insertAtTop = false) {
     const row = document.createElement('tr');
     if (animate) {
         row.className = 'new-alert-animation';
@@ -174,8 +218,8 @@ function addAlertToTable(alert, animate = true, insertAtTop = true) {
     // Format price
     const price = alert.price ? `$${parseFloat(alert.price).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : 'N/A';
     
-    // Convert time to GMT+7
-    const timeGMT7 = convertToGMT7(alert.time_date);
+    // Format time (already GMT+7 from backend)
+    const timeGMT7 = formatTime(alert.time_date);
     
     row.innerHTML = `
         <td><small>${timeGMT7}</small></td>
@@ -189,18 +233,8 @@ function addAlertToTable(alert, animate = true, insertAtTop = true) {
         </a></td>
     `;
     
-    if (insertAtTop) {
-        // Insert at the beginning (for new real-time alerts)
-        alertsTableBody.insertBefore(row, alertsTableBody.firstChild);
-    } else {
-        // Append at the end (for historical data already sorted DESC)
-        alertsTableBody.appendChild(row);
-    }
-    
-    // Keep only last 100 rows
-    while (alertsTableBody.children.length > 100) {
-        alertsTableBody.removeChild(alertsTableBody.lastChild);
-    }
+    // Just append - pagination handles ordering
+    alertsTableBody.appendChild(row);
 }
 
 function showNoAlerts() {
@@ -339,6 +373,13 @@ function alertPassesFilters(alert) {
         }
     }
     
+    // Check date filter
+    if (currentFilters.date === 'today') {
+        if (!isToday(alert.time_date)) {
+            return false;
+        }
+    }
+    
     return true;
 }
 
@@ -348,18 +389,17 @@ function applyFilters() {
     currentFilters.timeframes = getSelectedValues('timeframeFilter');
     currentFilters.directions = getSelectedValues('directionFilter');
     currentFilters.patterns = getSelectedValues('patternFilter');
+    currentFilters.date = document.getElementById('dateFilter').value;
     
     // Apply filters to all alerts
-    const filteredAlerts = applyCurrentFilters(allAlerts);
+    filteredAlerts = applyCurrentFilters(allAlerts);
     
-    // Clear table and display filtered alerts
-    alertsTableBody.innerHTML = '';
+    // Reset to page 1 and recalculate pagination
+    currentPage = 1;
+    totalPages = Math.ceil(filteredAlerts.length / itemsPerPage);
     
-    if (filteredAlerts.length === 0) {
-        showNoAlerts();
-    } else {
-        filteredAlerts.forEach(alert => addAlertToTable(alert, false, false));
-    }
+    // Display first page
+    displayCurrentPage();
     
     // Update alert count
     updateAlertCount(filteredAlerts.length);
@@ -367,7 +407,14 @@ function applyFilters() {
     // Update active filters display
     updateActiveFiltersDisplay();
     
-    console.log(`🔍 Applied filters: ${filteredAlerts.length}/${allAlerts.length} alerts shown`);
+    // Show/hide pagination
+    if (filteredAlerts.length > itemsPerPage) {
+        showPagination();
+    } else {
+        hidePagination();
+    }
+    
+    console.log(`🔍 Applied filters: ${filteredAlerts.length}/${allAlerts.length} alerts found, showing page ${currentPage} of ${totalPages}`);
 }
 
 function clearFilters() {
@@ -376,24 +423,36 @@ function clearFilters() {
         symbols: [],
         timeframes: [],
         directions: [],
-        patterns: []
+        patterns: [],
+        date: ''
     };
     
     // Clear all select values
-    ['symbolFilter', 'timeframeFilter', 'directionFilter', 'patternFilter'].forEach(id => {
+    ['symbolFilter', 'timeframeFilter', 'directionFilter', 'patternFilter', 'dateFilter'].forEach(id => {
         const select = document.getElementById(id);
         Array.from(select.options).forEach(option => option.selected = false);
     });
     
-    // Show all alerts (append at end to maintain DESC order from backend)
-    alertsTableBody.innerHTML = '';
-    allAlerts.forEach(alert => addAlertToTable(alert, false, false));
+    // Reset filtered alerts and pagination
+    filteredAlerts = [...allAlerts];
+    currentPage = 1;
+    totalPages = Math.ceil(filteredAlerts.length / itemsPerPage);
+    
+    // Display first page
+    displayCurrentPage();
     
     // Update alert count
     updateAlertCount();
     
     // Clear active filters display
     updateActiveFiltersDisplay();
+    
+    // Show/hide pagination
+    if (filteredAlerts.length > itemsPerPage) {
+        showPagination();
+    } else {
+        hidePagination();
+    }
     
     console.log('🗑️ Cleared all filters');
 }
@@ -415,6 +474,18 @@ function updateActiveFiltersDisplay() {
         { key: 'directions', label: 'Direction', icon: 'fas fa-arrow-trend-up' },
         { key: 'patterns', label: 'Pattern', icon: 'fas fa-shapes' }
     ];
+    
+    // Add date filter if active
+    if (currentFilters.date === 'today') {
+        const tag = document.createElement('div');
+        tag.className = 'filter-tag';
+        tag.innerHTML = `
+            <i class="fas fa-calendar"></i>
+            Ngày: Hôm nay
+            <span class="remove" onclick="removeDateFilter()">×</span>
+        `;
+        activeFiltersContainer.appendChild(tag);
+    }
     
     filterTypes.forEach(filterType => {
         const values = currentFilters[filterType.key];
@@ -448,4 +519,86 @@ function removeFilter(filterType, value) {
     
     // Reapply filters
     applyFilters();
+}
+
+function removeDateFilter() {
+    currentFilters.date = '';
+    document.getElementById('dateFilter').value = '';
+    applyFilters();
+}
+
+/**
+ * Pagination Functions
+ */
+
+function displayCurrentPage() {
+    // Clear table
+    alertsTableBody.innerHTML = '';
+    
+    // Calculate start and end indices
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = Math.min(startIndex + itemsPerPage, filteredAlerts.length);
+    
+    // Get alerts for current page
+    const pageAlerts = filteredAlerts.slice(startIndex, endIndex);
+    
+    if (pageAlerts.length === 0) {
+        showNoAlerts();
+    } else {
+        pageAlerts.forEach(alert => addAlertToTable(alert, false));
+    }
+    
+    // Update pagination UI
+    updatePaginationUI();
+}
+
+function updatePaginationUI() {
+    const startIndex = (currentPage - 1) * itemsPerPage + 1;
+    const endIndex = Math.min(currentPage * itemsPerPage, filteredAlerts.length);
+    
+    // Update page info
+    document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages}`;
+    document.getElementById('rangeInfo').textContent = `Showing ${startIndex}-${endIndex} of ${filteredAlerts.length}`;
+    
+    // Update button states
+    document.getElementById('firstPageBtn').disabled = currentPage === 1;
+    document.getElementById('prevPageBtn').disabled = currentPage === 1;
+    document.getElementById('nextPageBtn').disabled = currentPage === totalPages;
+    document.getElementById('lastPageBtn').disabled = currentPage === totalPages;
+}
+
+function showPagination() {
+    document.getElementById('paginationContainer').style.display = 'flex';
+}
+
+function hidePagination() {
+    document.getElementById('paginationContainer').style.display = 'none';
+}
+
+function goToFirstPage() {
+    if (currentPage !== 1) {
+        currentPage = 1;
+        displayCurrentPage();
+    }
+}
+
+function goToPrevPage() {
+    if (currentPage > 1) {
+        currentPage--;
+        displayCurrentPage();
+    }
+}
+
+function goToNextPage() {
+    if (currentPage < totalPages) {
+        currentPage++;
+        displayCurrentPage();
+    }
+}
+
+function goToLastPage() {
+    if (currentPage !== totalPages) {
+        currentPage = totalPages;
+        displayCurrentPage();
+    }
 }

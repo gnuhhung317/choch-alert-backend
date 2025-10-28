@@ -165,6 +165,14 @@ var float p2_price       = na
 var bool  acceptedPH_event = false
 var bool  acceptedPL_event = false
 
+// Pattern group order flags (needed for CHoCH confirmation)
+var bool g1_upOrder = false
+var bool g1_downOrder = false
+var bool g2_upOrder = false
+var bool g2_downOrder = false
+var bool g3_upOrder = false
+var bool g3_downOrder = false
+
 // ========== Khi có pivot mới ==========
 acceptedPH_event := false
 acceptedPL_event := false
@@ -223,6 +231,8 @@ if (isPH or isPL)
 // ========== 8-Pattern ==========
 var float pivot6 = na   // p6 (reference cho CHoCH)
 var float pivot5 = na   // p5 (additional reference cho CHoCH)
+var float saved_p5 = na // Store p5 for pattern group confirmation
+var float saved_p7 = na // Store p7 for pattern group confirmation (G2)
 eightReady = pCount() >= 8
 if eightReady
     [b8,p8,h8] = getPivotFromEnd(0)
@@ -255,20 +265,20 @@ if eightReady
 
     // Ràng buộc thứ tự 8-pivot - 3 nhóm (G1, G2, G3)
     // G1 (Original):
-    g1_upOrder   = (p2 < p4 and p4 < p6 and p6 < p8) and (p3 < p5 and p5 < p7)
-    g1_downOrder = (p3 > p5 and p5 > p7) and (p2 > p4 and p4 > p6 and p6 > p8)
+    g1_upOrder   := (p2 < p4 and p4 < p6 and p6 < p8) and (p3 < p5 and p5 < p7)
+    g1_downOrder := (p3 > p5 and p5 > p7) and (p2 > p4 and p4 > p6 and p6 > p8)
     
     // G2:
     // Uptrend: p3 < p7 < p5, p2 < p6 < p4 < p8, p2 < p5
-    g2_upOrder   = (p3 < p7 and p7 < p5) and (p2 < p6 and p6 < p4 and p4 < p8) and (p2 < p5)
+    g2_upOrder   := (p3 < p7 and p7 < p5) and (p2 < p6 and p6 < p4 and p4 < p8) and (p2 < p5)
     // Downtrend: p3 > p7 > p5, p2 > p6 > p4 > p8, p2 > p5
-    g2_downOrder = (p3 > p7 and p7 > p5) and (p2 > p6 and p6 > p4 and p4 > p8) and (p2 > p5)
+    g2_downOrder := (p3 > p7 and p7 > p5) and (p2 > p6 and p6 > p4 and p4 > p8) and (p2 > p5)
     
     // G3:
     // Uptrend: p3 < p5 < p7, p2 < p6 < p4 < p8, p2 < p5
-    g3_upOrder   = (p3 < p5 and p5 < p7) and (p2 < p6 and p6 < p4 and p4 < p8) and (p2 < p5)
+    g3_upOrder   := (p3 < p5 and p5 < p7) and (p2 < p6 and p6 < p4 and p4 < p8) and (p2 < p5)
     // Downtrend: p3 > p5 > p7, p2 > p6 > p4 > p8, p2 > p5
-    g3_downOrder = (p3 > p5 and p5 > p7) and (p2 > p6 and p6 > p4 and p4 > p8) and (p2 > p5)
+    g3_downOrder := (p3 > p5 and p5 > p7) and (p2 > p6 and p6 > p4 and p4 > p8) and (p2 > p5)
     
     // Combined order check (bất kỳ nhóm nào hợp lệ)
     upOrderOK   = g1_upOrder or g2_upOrder or g3_upOrder
@@ -298,10 +308,13 @@ if eightReady
     // Downtrend pattern + DOWN breakout conditions
     lastEightDown := downStruct and downOrderOK and touchRetest and isLowest8  and downBreakout
 
-    // Lưu p5 và p6 khi mẫu hợp lệ
+    // Lưu pivots khi mẫu hợp lệ
     if (lastEightDown or lastEightUp)
         pivot5 := p5
         pivot6 := p6
+        // Store pivot values for confirmation logic
+        saved_p5 := p5
+        saved_p7 := p7
 
     lastEightBarIdx := b8
     p2_price        := p2
@@ -311,6 +324,7 @@ isAfterEight = eightReady and (bar_index > nz(lastEightBarIdx))
 
 var bool fireChochUp = false
 var bool fireChochDn = false
+var string matchedGroup = na  // Track which pattern group matched
 
 if eightReady and not na(pivot6) and not na(pivot5)
     // ========== 3-CANDLE CHoCH CONFIRMATION (matching Python logic) ==========
@@ -325,20 +339,55 @@ if eightReady and not na(pivot6) and not na(pivot5)
     chochDownBar = (high[1] < high[2]) and (close[1] < low[2]) and 
                    (close[1] < pivot6) and (close[1] > pivot5)
 
-    // Confirmation conditions (nến [0] - current bar)
+    // Confirmation conditions - Basic (nến [0] - current bar)
     // CHoCH Up confirmed: current low > high của nến pre-CHoCH [2]
-    confirmUp = (low > high[2])
+    confirmUpBasic = (low > high[2])
     
     // CHoCH Down confirmed: current high < low của nến pre-CHoCH [2]
-    confirmDown = (high < low[2])
+    confirmDownBasic = (high < low[2])
 
     // Match with pattern direction
-    baseUp   = isAfterEight and lastEightDown and chochUpBar and confirmUp
-    baseDown = isAfterEight and lastEightUp   and chochDownBar and confirmDown
+    baseUp   = isAfterEight and lastEightDown and chochUpBar and confirmUpBasic
+    baseDown = isAfterEight and lastEightUp   and chochDownBar and confirmDownBasic
+
+    // ========== PATTERN GROUP SPECIFIC CONDITIONS for Confirmation Candle ==========
+    // Determine which group matched
+    if lastEightUp
+        matchedGroup := g1_upOrder ? "G1" : (g2_upOrder ? "G2" : "G3")
+    else if lastEightDown
+        matchedGroup := g1_downOrder ? "G1" : (g2_downOrder ? "G2" : "G3")
+
+    // Apply pattern group conditions
+    confirmUp = false
+    confirmDown = false
+    
+    if baseUp and not na(matchedGroup)
+        // Downtrend → CHoCH Up
+        if matchedGroup == "G1"
+            // G1: Close_CF <= HIGH_5
+            confirmUp := close <= saved_p5
+        else if matchedGroup == "G2"
+            // G2: Close_CF <= HIGH_7
+            confirmUp := close <= saved_p7
+        else if matchedGroup == "G3"
+            // G3: Close_CF <= HIGH_5
+            confirmUp := close <= saved_p5
+    
+    if baseDown and not na(matchedGroup)
+        // Uptrend → CHoCH Down
+        if matchedGroup == "G1"
+            // G1: Close_CF >= LOW_5
+            confirmDown := close >= saved_p5
+        else if matchedGroup == "G2"
+            // G2: Close_CF >= LOW_7
+            confirmDown := close >= saved_p7
+        else if matchedGroup == "G3"
+            // G3: Close_CF >= LOW_5
+            confirmDown := close >= saved_p5
 
     // Fire signal với locking
-    fireChochUp := (not chochLocked) and baseUp
-    fireChochDn := (not chochLocked) and baseDown
+    fireChochUp := (not chochLocked) and confirmUp
+    fireChochDn := (not chochLocked) and confirmDown
 
     if fireChochUp or fireChochDn
         chochLocked := true

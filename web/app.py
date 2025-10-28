@@ -10,6 +10,8 @@ from typing import Dict, List
 import threading
 import os
 import sys
+from datetime import datetime, timedelta
+import pytz
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -28,8 +30,11 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 # Initialize database
 db = get_database('data/choch_alerts.db')
 
-# Maximum alerts to keep in memory for real-time updates
-MAX_RECENT_ALERTS = 100
+# Maximum alerts per page
+MAX_ALERTS_PER_PAGE = 50
+
+# GMT+7 timezone
+GMT7 = pytz.timezone('Asia/Bangkok')
 
 
 @app.route('/')
@@ -57,8 +62,8 @@ def health():
 def get_alerts():
     """API endpoint to get alerts with filtering"""
     try:
-        # Get query parameters
-        limit = min(int(request.args.get('limit', 100)), 1000)  # Max 1000
+        # Get query parameters - Max 50 per page
+        limit = min(int(request.args.get('limit', MAX_ALERTS_PER_PAGE)), MAX_ALERTS_PER_PAGE)
         offset = int(request.args.get('offset', 0))
         
         # Filter parameters
@@ -66,6 +71,7 @@ def get_alerts():
         timeframes = request.args.getlist('timeframe') 
         directions = request.args.getlist('direction')
         signal_types = request.args.getlist('signal_type')
+        date_filter = request.args.get('date_filter', '')  # 'today' or empty
         
         # Get filtered alerts
         if any([symbols, timeframes, directions, signal_types]):
@@ -79,6 +85,16 @@ def get_alerts():
             )
         else:
             alerts = db.get_recent_alerts(limit=limit, offset=offset)
+        
+        # Apply date filter if needed
+        if date_filter == 'today':
+            # Get today's date in GMT+7
+            now_gmt7 = datetime.now(GMT7)
+            today_start = now_gmt7.replace(hour=0, minute=0, second=0, microsecond=0)
+            
+            # Filter alerts from today
+            alerts = [alert for alert in alerts 
+                     if datetime.fromisoformat(alert['time_date'].replace('Z', '+00:00')).astimezone(GMT7) >= today_start]
         
         return jsonify({
             'alerts': alerts,
@@ -118,9 +134,9 @@ def get_unique_values():
 def handle_connect():
     """Handle client connection"""
     logger.info(f'Client connected')
-    # Send recent alerts to newly connected client
+    # Send recent alerts to newly connected client (max 50)
     try:
-        recent_alerts = db.get_recent_alerts(limit=MAX_RECENT_ALERTS)
+        recent_alerts = db.get_recent_alerts(limit=MAX_ALERTS_PER_PAGE)
         emit('alerts_history', recent_alerts)
         logger.info(f"Sent {len(recent_alerts)} recent alerts to new client")
     except Exception as e:
@@ -136,9 +152,9 @@ def handle_disconnect():
 
 @socketio.on('request_history')
 def handle_request_history():
-    """Send alert history to client"""
+    """Send alert history to client (max 50)"""
     try:
-        recent_alerts = db.get_recent_alerts(limit=MAX_RECENT_ALERTS)
+        recent_alerts = db.get_recent_alerts(limit=MAX_ALERTS_PER_PAGE)
         emit('alerts_history', recent_alerts)
         logger.info(f"Sent {len(recent_alerts)} alerts on history request")
     except Exception as e:

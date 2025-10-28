@@ -6,8 +6,12 @@ from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, 
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import logging
+import pytz
 
 logger = logging.getLogger(__name__)
+
+# GMT+7 timezone for Vietnam/Thailand
+GMT7 = pytz.timezone('Asia/Bangkok')
 
 Base = declarative_base()
 
@@ -54,13 +58,18 @@ class Alert(Base):
     def to_dict(self):
         """
         Convert Alert model to dictionary format for API/JSON response
+        Timestamps are converted to GMT+7
         
         Returns:
             dict: Alert data in the format expected by frontend
         """
+        # Convert UTC timestamp to GMT+7
+        signal_time_gmt7 = self.signal_timestamp.replace(tzinfo=pytz.UTC).astimezone(GMT7)
+        created_time_gmt7 = self.created_at.replace(tzinfo=pytz.UTC).astimezone(GMT7)
+        
         return {
             'id': self.id,
-            'time_date': self.signal_timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+            'time_date': signal_time_gmt7.strftime('%Y-%m-%d %H:%M:%S'),
             'symbol': self.symbol,
             'mã': self.symbol,  # Vietnamese alias
             'khung': self.timeframe,  # Vietnamese for timeframe
@@ -69,7 +78,7 @@ class Alert(Base):
             'loại': self.signal_type,  # Vietnamese for signal type
             'price': self.price,
             'tradingview_link': self.tradingview_link,
-            'created_at': self.created_at.isoformat(),
+            'created_at': created_time_gmt7.isoformat(),
             'is_futures': self.is_futures,
             'region': self.region,
             'confidence_score': self.confidence_score,
