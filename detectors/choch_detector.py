@@ -419,6 +419,13 @@ class ChochDetector:
           * G2: Close_CF >= LOW_7
           * G3: Close_CF >= LOW_5
         
+        Volume Conditions:
+        - G1: (678_ok AND 456_ok) OR 45678_ok
+          * 678_ok: (Vol8 OR Vol6 OR Vol_CHoCH) max in {vol6, vol7, vol8}
+          * 456_ok: (Vol4 OR Vol6) max in {vol4, vol5, vol6}
+          * 45678_ok: (Vol8 OR Vol_CHoCH) max in {vol4, vol5, vol6, vol7, vol8}
+        - G2/G3: (Vol4 OR Vol5 OR Vol_CHoCH) max in cluster 456
+        
         Returns: (fire_choch_up, fire_choch_down)
         """
         if state.pivot_count() < 8:
@@ -461,6 +468,18 @@ class ChochDetector:
         b3, p3, h3 = state.get_pivot_from_end(5)
         b2, p2, h2 = state.get_pivot_from_end(6)
         b1, p1, h1 = state.get_pivot_from_end(7)
+        
+        # Get volumes at pivot bars
+        try:
+            vol8 = df.loc[b8, 'volume']
+            vol7 = df.loc[b7, 'volume']
+            vol6 = df.loc[b6, 'volume']
+            vol5 = df.loc[b5, 'volume']
+            vol4 = df.loc[b4, 'volume']
+            vol_choch = prev['volume']  # Volume of CHoCH candle
+        except KeyError:
+            logger.warning(f"Cannot get volume data for pivots")
+            return False, False
 
         # CHoCH conditions on previous bar (nến CHoCH - ĐÃ ĐÓNG)
         # CHoCH Up: low[prev] > low[pre_prev] AND close[prev] > high[pre_prev] AND close[prev] > pivot6 AND close[prev] < pivot5
@@ -492,27 +511,111 @@ class ChochDetector:
         
         if confirm_up_basic and state.pattern_group:
             # Downtrend → CHoCH Up
+            price_condition = False
+            volume_condition = False
+            
             if state.pattern_group == "G1":
                 # G1: Close_CF <= HIGH_5
-                confirm_up = current['close'] <= p5
+                price_condition = current['close'] <= p5
+                
+                # Volume condition G1: (678_ok AND 456_ok) OR 45678_ok
+                # 1. (Vol8 OR Vol6 OR Vol_CHoCH) là lớn nhất cụm 678
+                max_678 = max(vol6, vol7, vol8)
+                vol_678_ok = (vol8 == max_678) or (vol6 == max_678) or (vol_choch == max_678)
+                
+                # 2. (Vol4 OR Vol6) là lớn nhất cụm 456
+                max_456 = max(vol4, vol5, vol6)
+                vol_456_ok = (vol4 == max_456) or (vol6 == max_456)
+                
+                # 3. (Vol8 OR Vol_CHoCH) là lớn nhất cụm 45678
+                max_45678 = max(vol4, vol5, vol6, vol7, vol8)
+                vol_45678_ok = (vol8 == max_45678) or (vol_choch == max_45678)
+                
+                volume_condition = (vol_678_ok and vol_456_ok) or vol_45678_ok
+                confirm_up = price_condition and volume_condition
+                
+                if not volume_condition:
+                    logger.debug(f"[G1] Volume condition failed - 678_ok:{vol_678_ok} 456_ok:{vol_456_ok} 45678_ok:{vol_45678_ok}")
+                
             elif state.pattern_group == "G2":
                 # G2: Close_CF <= HIGH_7
-                confirm_up = current['close'] <= p7
+                price_condition = current['close'] <= p7
+                
+                # Volume condition G2/G3:
+                # (Vol4 OR Vol5 OR Vol_CHoCH) là lớn nhất cụm 456
+                max_456 = max(vol4, vol5, vol6)
+                volume_condition = (vol4 == max_456) or (vol5 == max_456) or (vol_choch == max_456)
+                confirm_up = price_condition and volume_condition
+                
+                if not volume_condition:
+                    logger.debug(f"[G2] Volume condition failed - vol4={vol4:.0f} vol5={vol5:.0f} vol_choch={vol_choch:.0f} max={max_456:.0f}")
+                
             elif state.pattern_group == "G3":
                 # G3: Close_CF <= HIGH_5
-                confirm_up = current['close'] <= p5
+                price_condition = current['close'] <= p5
+                
+                # Volume condition G2/G3:
+                # (Vol4 OR Vol5 OR Vol_CHoCH) là lớn nhất cụm 456
+                max_456 = max(vol4, vol5, vol6)
+                volume_condition = (vol4 == max_456) or (vol5 == max_456) or (vol_choch == max_456)
+                confirm_up = price_condition and volume_condition
+                
+                if not volume_condition:
+                    logger.debug(f"[G3] Volume condition failed - vol4={vol4:.0f} vol5={vol5:.0f} vol_choch={vol_choch:.0f} max={max_456:.0f}")
         
         if confirm_down_basic and state.pattern_group:
             # Uptrend → CHoCH Down
+            price_condition = False
+            volume_condition = False
+            
             if state.pattern_group == "G1":
                 # G1: Close_CF >= LOW_5
-                confirm_down = current['close'] >= p5
+                price_condition = current['close'] >= p5
+                
+                # Volume condition G1: (678_ok AND 456_ok) OR 45678_ok
+                # 1. (Vol8 OR Vol6 OR Vol_CHoCH) là lớn nhất cụm 678
+                max_678 = max(vol6, vol7, vol8)
+                vol_678_ok = (vol8 == max_678) or (vol6 == max_678) or (vol_choch == max_678)
+                
+                # 2. (Vol4 OR Vol6) là lớn nhất cụm 456
+                max_456 = max(vol4, vol5, vol6)
+                vol_456_ok = (vol4 == max_456) or (vol6 == max_456)
+                
+                # 3. (Vol8 OR Vol_CHoCH) là lớn nhất cụm 45678
+                max_45678 = max(vol4, vol5, vol6, vol7, vol8)
+                vol_45678_ok = (vol8 == max_45678) or (vol_choch == max_45678)
+                
+                volume_condition = (vol_678_ok and vol_456_ok) or vol_45678_ok
+                confirm_down = price_condition and volume_condition
+                
+                if not volume_condition:
+                    logger.debug(f"[G1] Volume condition failed - 678_ok:{vol_678_ok} 456_ok:{vol_456_ok} 45678_ok:{vol_45678_ok}")
+                
             elif state.pattern_group == "G2":
                 # G2: Close_CF >= LOW_7
-                confirm_down = current['close'] >= p7
+                price_condition = current['close'] >= p7
+                
+                # Volume condition G2/G3:
+                # (Vol4 OR Vol5 OR Vol_CHoCH) là lớn nhất cụm 456
+                max_456 = max(vol4, vol5, vol6)
+                volume_condition = (vol4 == max_456) or (vol5 == max_456) or (vol_choch == max_456)
+                confirm_down = price_condition and volume_condition
+                
+                if not volume_condition:
+                    logger.debug(f"[G2] Volume condition failed - vol4={vol4:.0f} vol5={vol5:.0f} vol_choch={vol_choch:.0f} max={max_456:.0f}")
+                
             elif state.pattern_group == "G3":
                 # G3: Close_CF >= LOW_5
-                confirm_down = current['close'] >= p5
+                price_condition = current['close'] >= p5
+                
+                # Volume condition G2/G3:
+                # (Vol4 OR Vol5 OR Vol_CHoCH) là lớn nhất cụm 456
+                max_456 = max(vol4, vol5, vol6)
+                volume_condition = (vol4 == max_456) or (vol5 == max_456) or (vol_choch == max_456)
+                confirm_down = price_condition and volume_condition
+                
+                if not volume_condition:
+                    logger.debug(f"[G3] Volume condition failed - vol4={vol4:.0f} vol5={vol5:.0f} vol_choch={vol_choch:.0f} max={max_456:.0f}")
 
         # Fire signal nếu có confirmation và chưa lock
         if not state.choch_locked and (confirm_up or confirm_down):
@@ -523,13 +626,29 @@ class ChochDetector:
             fire_choch_up = confirm_up
             fire_choch_down = confirm_down
             
-            # Log pattern group condition
+            # Log pattern group condition with volume info
             if confirm_up:
                 ref_pivot = p7 if state.pattern_group == "G2" else p5
-                logger.info(f"[CHoCH-{state.pattern_group}] ✅ CONFIRMED UP @ {prev['close']:.6f} (Close_CF {current['close']:.6f} <= P{'7' if state.pattern_group == 'G2' else '5'} {ref_pivot:.6f})")
+                if state.pattern_group == "G1":
+                    logger.info(f"[CHoCH-{state.pattern_group}] ✅ CONFIRMED UP @ {prev['close']:.6f} (Close_CF {current['close']:.6f} <= P5 {ref_pivot:.6f})")
+                    logger.info(f"   Volume: vol4={vol4:.0f} vol5={vol5:.0f} vol6={vol6:.0f} vol7={vol7:.0f} vol8={vol8:.0f} vol_choch={vol_choch:.0f}")
+                elif state.pattern_group == "G2":
+                    logger.info(f"[CHoCH-{state.pattern_group}] ✅ CONFIRMED UP @ {prev['close']:.6f} (Close_CF {current['close']:.6f} <= P7 {ref_pivot:.6f})")
+                    logger.info(f"   Volume 456: vol4={vol4:.0f} vol5={vol5:.0f} vol6={vol6:.0f} vol_choch={vol_choch:.0f}")
+                else:  # G3
+                    logger.info(f"[CHoCH-{state.pattern_group}] ✅ CONFIRMED UP @ {prev['close']:.6f} (Close_CF {current['close']:.6f} <= P5 {ref_pivot:.6f})")
+                    logger.info(f"   Volume 456: vol4={vol4:.0f} vol5={vol5:.0f} vol6={vol6:.0f} vol_choch={vol_choch:.0f}")
             else:
                 ref_pivot = p7 if state.pattern_group == "G2" else p5
-                logger.info(f"[CHoCH-{state.pattern_group}] ✅ CONFIRMED DOWN @ {prev['close']:.6f} (Close_CF {current['close']:.6f} >= P{'7' if state.pattern_group == 'G2' else '5'} {ref_pivot:.6f})")
+                if state.pattern_group == "G1":
+                    logger.info(f"[CHoCH-{state.pattern_group}] ✅ CONFIRMED DOWN @ {prev['close']:.6f} (Close_CF {current['close']:.6f} >= P5 {ref_pivot:.6f})")
+                    logger.info(f"   Volume: vol4={vol4:.0f} vol5={vol5:.0f} vol6={vol6:.0f} vol7={vol7:.0f} vol8={vol8:.0f} vol_choch={vol_choch:.0f}")
+                elif state.pattern_group == "G2":
+                    logger.info(f"[CHoCH-{state.pattern_group}] ✅ CONFIRMED DOWN @ {prev['close']:.6f} (Close_CF {current['close']:.6f} >= P7 {ref_pivot:.6f})")
+                    logger.info(f"   Volume 456: vol4={vol4:.0f} vol5={vol5:.0f} vol6={vol6:.0f} vol_choch={vol_choch:.0f}")
+                else:  # G3
+                    logger.info(f"[CHoCH-{state.pattern_group}] ✅ CONFIRMED DOWN @ {prev['close']:.6f} (Close_CF {current['close']:.6f} >= P5 {ref_pivot:.6f})")
+                    logger.info(f"   Volume 456: vol4={vol4:.0f} vol5={vol5:.0f} vol6={vol6:.0f} vol_choch={vol_choch:.0f}")
             
             logger.info(f"   CHoCH bar: {prev_idx} (O:{prev['open']}, H:{prev['high']}, L:{prev['low']}, C:{prev['close']}) [CLOSED]")
             logger.info(f"   Pre-CHoCH: {pre_prev_idx} (O:{pre_prev['open']}, H:{pre_prev['high']}, L:{pre_prev['low']}, C:{pre_prev['close']}) [CLOSED]")

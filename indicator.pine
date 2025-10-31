@@ -27,15 +27,20 @@ var bool chochLocked = false
 var prices = array.new_float()
 var bars   = array.new_int()
 var highs  = array.new_bool()
+var volumes = array.new_float()  // Store pivot volumes
 
 storePivot(_bar, _price, _isHigh) =>
     array.push(bars,   _bar)
     array.push(prices, _price)
     array.push(highs,  _isHigh)
+    // Store volume at pivot bar
+    off = math.max(0, bar_index - _bar)
+    array.push(volumes, volume[off])
     while array.size(bars) > keepPivots
         array.shift(bars)
         array.shift(prices)
         array.shift(highs)
+        array.shift(volumes)
 
 pCount() => array.size(prices)
 
@@ -44,6 +49,10 @@ getPivotFromEnd(idxFromEnd) =>
     [ array.get(bars,   sz-1-idxFromEnd),
       array.get(prices, sz-1-idxFromEnd),
       array.get(highs,  sz-1-idxFromEnd) ]
+
+getVolumeFromEnd(idxFromEnd) =>
+    sz = array.size(volumes)
+    array.get(volumes, sz-1-idxFromEnd)
 
 // Dung sai tick
 tol = syminfo.mintick * touchTicks
@@ -357,33 +366,105 @@ if eightReady and not na(pivot6) and not na(pivot5)
     else if lastEightDown
         matchedGroup := g1_downOrder ? "G1" : (g2_downOrder ? "G2" : "G3")
 
-    // Apply pattern group conditions
+    // Get volumes at pivot bars
+    vol8 = getVolumeFromEnd(0)
+    vol7 = getVolumeFromEnd(1)
+    vol6 = getVolumeFromEnd(2)
+    vol5 = getVolumeFromEnd(3)
+    vol4 = getVolumeFromEnd(4)
+    vol_choch = volume[1]  // Volume of CHoCH candle (previous bar)
+
+    // Apply pattern group conditions with volume
     confirmUp = false
     confirmDown = false
     
     if baseUp and not na(matchedGroup)
         // Downtrend → CHoCH Up
+        priceCondition = false
+        volumeCondition = false
+        
         if matchedGroup == "G1"
             // G1: Close_CF <= HIGH_5
-            confirmUp := close <= saved_p5
+            priceCondition := close <= saved_p5
+            
+            // (Vol8 OR Vol6 OR Vol_CHoCH) là lớn nhất cụm 678
+            max_678 = math.max(vol6, math.max(vol7, vol8))
+            vol_678_ok = (vol8 == max_678) or (vol6 == max_678) or (vol_choch == max_678)
+            
+            // (Vol4 OR Vol6) là lớn nhất cụm 456
+            max_456 = math.max(vol4, math.max(vol5, vol6))
+            vol_456_ok = (vol4 == max_456) or (vol6 == max_456)
+            
+            // (Vol8 OR Vol_CHoCH) là lớn nhất cụm 45678
+            max_45678 = math.max(vol4, math.max(vol5, math.max(vol6, math.max(vol7, vol8))))
+            vol_45678_ok = (vol8 == max_45678) or (vol_choch >= max_45678)
+            
+            volumeCondition := (vol_678_ok and vol_456_ok) or vol_45678_ok
+            confirmUp := priceCondition and volumeCondition
+            
         else if matchedGroup == "G2"
             // G2: Close_CF <= HIGH_7
-            confirmUp := close <= saved_p7
+            priceCondition := close <= saved_p7
+            
+            // Volume condition G2/G3:
+            // (Vol4 OR Vol5 OR Vol_CHoCH) là lớn nhất cụm 456
+            max_456 = math.max(vol4, math.max(vol5, vol6))
+            volumeCondition := (vol4 == max_456) or (vol5 == max_456) or (vol_choch == max_456)
+            confirmUp := priceCondition and volumeCondition
+            
         else if matchedGroup == "G3"
             // G3: Close_CF <= HIGH_5
-            confirmUp := close <= saved_p5
+            priceCondition := close <= saved_p5
+            
+            // Volume condition G2/G3:
+            // (Vol4 OR Vol5 OR Vol_CHoCH) là lớn nhất cụm 456
+            max_456 = math.max(vol4, math.max(vol5, vol6))
+            volumeCondition := (vol4 == max_456) or (vol5 == max_456) or (vol_choch == max_456)
+            confirmUp := priceCondition and volumeCondition
     
     if baseDown and not na(matchedGroup)
         // Uptrend → CHoCH Down
+        priceCondition = false
+        volumeCondition = false
+        
         if matchedGroup == "G1"
             // G1: Close_CF >= LOW_5
-            confirmDown := close >= saved_p5
+            priceCondition := close >= saved_p5
+            
+            // (Vol8 OR Vol6 OR Vol_CHoCH) là lớn nhất cụm 678
+            max_678 = math.max(vol6, math.max(vol7, vol8))
+            vol_678_ok = (vol8 == max_678) or (vol6 == max_678) or (vol_choch == max_678)
+            
+            // (Vol4 OR Vol6) là lớn nhất cụm 456
+            max_456 = math.max(vol4, math.max(vol5, vol6))
+            vol_456_ok = (vol4 == max_456) or (vol6 == max_456)
+            
+            // (Vol8 OR Vol_CHoCH) là lớn nhất cụm 45678
+            max_45678 = math.max(vol4, math.max(vol5, math.max(vol6, math.max(vol7, vol8))))
+            vol_45678_ok = (vol8 == max_45678) or (vol_choch >= max_45678)
+            
+            volumeCondition := (vol_678_ok and vol_456_ok) or vol_45678_ok
+            confirmDown := priceCondition and volumeCondition
+            
         else if matchedGroup == "G2"
             // G2: Close_CF >= LOW_7
-            confirmDown := close >= saved_p7
+            priceCondition := close >= saved_p7
+            
+            // Volume condition G2/G3:
+            // (Vol4 OR Vol5 OR Vol_CHoCH) là lớn nhất cụm 456
+            max_456 = math.max(vol4, math.max(vol5, vol6))
+            volumeCondition := (vol4 == max_456) or (vol5 == max_456) or (vol_choch == max_456)
+            confirmDown := priceCondition and volumeCondition
+            
         else if matchedGroup == "G3"
             // G3: Close_CF >= LOW_5
-            confirmDown := close >= saved_p5
+            priceCondition := close >= saved_p5
+            
+            // Volume condition G2/G3:
+            // (Vol4 OR Vol5 OR Vol_CHoCH) là lớn nhất cụm 456
+            max_456 = math.max(vol4, math.max(vol5, vol6))
+            volumeCondition := (vol4 == max_456) or (vol5 == max_456) or (vol_choch == max_456)
+            confirmDown := priceCondition and volumeCondition
 
     // Fire signal với locking
     fireChochUp := (not chochLocked) and confirmUp

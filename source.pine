@@ -1,38 +1,31 @@
 //@version=5
-indicator("Pivot Waves + 6-Pattern + CHoCH (Fixed v6 with Variants)", overlay=true, max_lines_count=500, max_labels_count=500)
+indicator("Pivot Waves + 8-Pattern + CHoCH (upfate ver.)", overlay=true, max_lines_count=500, max_labels_count=500)
 
 // ========== Inputs ==========
-left        = input.int(1, "Pivot Left", minval=1)
-right       = input.int(1, "Pivot Right", minval=1)
+left        = input.int(1,  "Pivot Left",  minval=1)
+right       = input.int(1,  "Pivot Right", minval=1)
 drawWaves   = input.bool(true, "Vẽ sóng (nối line giữa các pivot)")
 useBodyBreak= input.bool(true, "CHoCH theo thân nến (close)")
 touchTicks  = input.int(2, "Độ dung sai 'chạm' (số tick)", minval=0)
 keepPivots  = input.int(200, "Số pivot tối đa lưu", minval=20)
 plotPvtMark = input.bool(true, "Hiển thị PH/PL")
-plotSixLbl  = input.bool(true, "Ghi nhãn P1..P6 gần nhất")
+plotEightLbl = input.bool(true, "Ghi nhãn P1..P8 gần nhất")
 showTable   = input.bool(true, "Bảng thông tin")
 
-// --- Variant filters (bật/tắt theo nhu cầu)
-useVariantFilter = input.bool(true, "Lọc theo biến thể Pivot (PH/PL loại 1/2/3)")
+// --- Variant filters (BẮT BUỘC - chỉ detect pivot có variant hợp lệ)
 allowPH1 = input.bool(true,  "Cho phép PH loại 1")
-allowPH2 = input.bool(true,  "Cho phép PH loại 2 (con là nến #1)")
-allowPH3 = input.bool(true,  "Cho phép PH loại 3 (biến thể khác)")
+allowPH2 = input.bool(true,  "Cho phép PH loại 2")
+allowPH3 = input.bool(true,  "Cho phép PH loại 3")
+allowPH4 = input.bool(true,  "Cho phép PH loại 4")
+allowPH5 = input.bool(false,  "Cho phép PH loại 5")
 allowPL1 = input.bool(true,  "Cho phép PL loại 1")
-allowPL2 = input.bool(true,  "Cho phép PL loại 2 (con là nến #1)")
-allowPL3 = input.bool(true,  "Cho phép PL loại 3 (biến thể khác)")
+allowPL2 = input.bool(true,  "Cho phép PL loại 2")
+allowPL3 = input.bool(true,  "Cho phép PL loại 3")
+allowPL4 = input.bool(true,  "Cho phép PL loại 4")
+allowPL5 = input.bool(false,  "Cho phép PL loại 5")
 showVariantLabel = input.bool(false, "Hiển thị mã biến thể trên chart")
+
 var bool chochLocked = false 
-
-// ========== Detect pivots ==========
-ph = ta.pivothigh(high, left, right)
-pl = ta.pivotlow(low,  left, right)
-isPH = not na(ph)
-isPL = not na(pl)
-
-// pivot price & bar (bar giữa là bar_index - right)
-newPivotPrice = isPH ? ph : isPL ? pl : na
-newPivotBar   = (isPH or isPL) ? (bar_index - right) : na
-newPivotHigh  = isPH
 
 // ========== Storage ==========
 var prices = array.new_float()
@@ -43,7 +36,6 @@ storePivot(_bar, _price, _isHigh) =>
     array.push(bars,   _bar)
     array.push(prices, _price)
     array.push(highs,  _isHigh)
-    // giới hạn kích thước
     while array.size(bars) > keepPivots
         array.shift(bars)
         array.shift(prices)
@@ -52,65 +44,99 @@ storePivot(_bar, _price, _isHigh) =>
 pCount() => array.size(prices)
 
 getPivotFromEnd(idxFromEnd) =>
-    // idxFromEnd = 0 là pivot mới nhất
     sz = array.size(prices)
     [ array.get(bars,   sz-1-idxFromEnd),
       array.get(prices, sz-1-idxFromEnd),
       array.get(highs,  sz-1-idxFromEnd) ]
 
-// tol = syminfo.mintick * touchTicks
-tol=0
+// Dung sai tick
+tol = syminfo.mintick * touchTicks
 
 // ========== Helpers cho phân loại biến thể ==========
 getHLTripletAroundMid() =>
-    float h2 = high[right]
+    // Timeline: [LEFT/h3] → [CENTER/h2/PIVOT] → [RIGHT/h1]
+    // Pine indexing: [right+1] → [right] → [right-1]
+    float h2 = high[right]      // CENTER (pivot bar)
     float l2 = low[right]
-    float h1 = na
-    float l1 = na
-    float h3 = na
+    float h3 = na               // LEFT side
     float l3 = na
+    float h1 = na               // RIGHT side
+    float l1 = na
+    
     if bar_index > right + 1
-        h1 := high[right + 1]
-        l1 := low[right + 1]
+        h3 := high[right + 1]   // LEFT side
+        l3 := low[right + 1]
     if right - 1 >= 0
-        h3 := high[right - 1]
-        l3 := low[right - 1]
+        h1 := high[right - 1]   // RIGHT side
+        l1 := low[right - 1]
     [h1,h2,h3,l1,l2,l3]
 
+// Pivot High Types
 isPH_type1() =>
+    // High_2 > High_1 and High_2 > High_3 và Low_2 > Low_1 and Low_2 > Low_3
     [h1,h2,h3,l1,l2,l3] = getHLTripletAroundMid()
     not na(h1) and not na(h3) and (h2 > h1 and h2 > h3) and (l2 > l1 and l2 > l3)
 
 isPH_type2() =>
+    // high2 >= high1 và high2 > high3 và low2 > low3 và low2 < low1
     [h1,h2,h3,l1,l2,l3] = getHLTripletAroundMid()
     not na(h1) and not na(h3) and (h2 >= h1 and h2 > h3) and (l2 > l3 and l2 < l1)
 
 isPH_type3() =>
+    // high2 >= high1 và high2 >= high3 và low2 <= low1 và low2 > low3
     [h1,h2,h3,l1,l2,l3] = getHLTripletAroundMid()
-    not na(h1) and not na(h3) and (h2 > h1 and h2 >= h3) and (l2 < l3 and l2 > l1)
+    not na(h1) and not na(h3) and (h2 >= h1 and h2 >= h3) and (l2 <= l1 and l2 > l3)
 
-isPL_type1() =>
+isPH_type4() =>
+    // high2 > high3 và high2 <= high1 và low2 > low3 và low2 >= low1
     [h1,h2,h3,l1,l2,l3] = getHLTripletAroundMid()
-    not na(h1) and not na(h3) and (l2 < l1 and l2 < l3) and (h2 < h1 and h2 < h3)
+    not na(h1) and not na(h3) and (h2 > h3 and h2 <= h1) and (l2 > l3 and l2 >= l1)
+
+isPH_type5() =>
+    // high2 <= high3 và high2 >= high1 và low2 >= low3 và low2 > low1
+    [h1,h2,h3,l1,l2,l3] = getHLTripletAroundMid()
+    not na(h1) and not na(h3) and (h2 <= h3 and h2 >= h1) and (l2 >= l3 and l2 > l1)
+
+// Pivot Low Types
+isPL_type1() =>
+    // high2 < high1 và high2 < high3 và low2 < low3 và low2 < low1
+    [h1,h2,h3,l1,l2,l3] = getHLTripletAroundMid()
+    not na(h1) and not na(h3) and (h2 < h1 and h2 < h3) and (l2 < l3 and l2 < l1)
 
 isPL_type2() =>
+    // high2 >= high1, high2 < high3 và low2 < low3 và low2 <= low1
     [h1,h2,h3,l1,l2,l3] = getHLTripletAroundMid()
     not na(h1) and not na(h3) and (h2 >= h1 and h2 < h3) and (l2 < l3 and l2 <= l1)
 
 isPL_type3() =>
+    // high2 < high1 và high2 >= high3 và low2 < low1 và low2 <= low3
     [h1,h2,h3,l1,l2,l3] = getHLTripletAroundMid()
-    not na(h1) and not na(h3) and (l2 < l1 and l2 < l3) and (h2 < h1 and h2 > h3)
+    not na(h1) and not na(h3) and (h2 < h1 and h2 >= h3) and (l2 < l1 and l2 <= l3)
+
+isPL_type4() =>
+    // high2 < high3 và high2 <= high1 và low2 < low3 và low2 >= low1
+    [h1,h2,h3,l1,l2,l3] = getHLTripletAroundMid()
+    not na(h1) and not na(h3) and (h2 < h3 and h2 <= h1) and (l2 < l3 and l2 >= l1)
+
+isPL_type5() =>
+    // high3 >= high2 và low3 <= low2 và high2 < high1 và low2 <= low1
+    [h1,h2,h3,l1,l2,l3] = getHLTripletAroundMid()
+    not na(h1) and not na(h3) and (h3 >= h2 and l3 <= l2) and (h2 < h1 and l2 <= l1)
 
 classifyPivotVariant(isHighPivot) =>
     var string t = "NA"
     if isHighPivot
         t := isPH_type1() ? "PH1" :
              isPH_type2() ? "PH2" :
-             isPH_type3() ? "PH3" : "NA"
+             isPH_type3() ? "PH3" :
+             isPH_type4() ? "PH4" :
+             isPH_type5() ? "PH5" : "NA"
     else
         t := isPL_type1() ? "PL1" :
              isPL_type2() ? "PL2" :
-             isPL_type3() ? "PL3" : "NA"
+             isPL_type3() ? "PL3" :
+             isPL_type4() ? "PL4" :
+             isPL_type5() ? "PL5" : "NA"
     t
 
 allowedByUser(t) =>
@@ -118,81 +144,131 @@ allowedByUser(t) =>
         "PH1" => allowPH1
         "PH2" => allowPH2
         "PH3" => allowPH3
+        "PH4" => allowPH4
+        "PH5" => allowPH5
         "PL1" => allowPL1
         "PL2" => allowPL2
         "PL3" => allowPL3
+        "PL4" => allowPL4
+        "PL5" => allowPL5
         => false
+
+// ========== Custom Pivot Detection (không dùng ta.pivot*) ==========
+// Detect pivot manually based on variant classification only
+var bool isPH = false
+var bool isPL = false
+var float newPivotPrice = na
+var int newPivotBar = na
+var bool newPivotHigh = false
+
+// Reset detection flags
+isPH := false
+isPL := false
+newPivotPrice := na
+newPivotBar := na
+
+// Chỉ check khi có đủ bars 2 bên
+if bar_index > right + 1 and right - 1 >= 0
+    // Check Pivot High variants
+    if isPH_type1() and allowPH1
+        isPH := true
+    else if isPH_type2() and allowPH2
+        isPH := true
+    else if isPH_type3() and allowPH3
+        isPH := true
+    else if isPH_type4() and allowPH4
+        isPH := true
+    else if isPH_type5() and allowPH5
+        isPH := true
+    
+    // Check Pivot Low variants
+    if isPL_type1() and allowPL1
+        isPL := true
+    else if isPL_type2() and allowPL2
+        isPL := true
+    else if isPL_type3() and allowPL3
+        isPL := true
+    else if isPL_type4() and allowPL4
+        isPL := true
+    else if isPL_type5() and allowPL5
+        isPL := true
+    
+    // Set pivot data if detected
+    if isPH
+        newPivotPrice := high[right]
+        newPivotBar := bar_index - right
+        newPivotHigh := true
+    else if isPL
+        newPivotPrice := low[right]
+        newPivotBar := bar_index - right
+        newPivotHigh := false
 
 // ========== State vars ==========
 var int   lastPivotBar   = na
 var float lastPivotPrice = na
-var bool  lastSixUp      = false
-var bool  lastSixDown    = false
-var int   lastSixBarIdx  = na
+var bool  lastEightUp    = false
+var bool  lastEightDown  = false
+var int   lastEightBarIdx = na
 var float p2_price       = na
 var bool  acceptedPH_event = false
 var bool  acceptedPL_event = false
+
+// Pattern group order flags (needed for CHoCH confirmation)
+var bool g1_upOrder = false
+var bool g1_downOrder = false
+var bool g2_upOrder = false
+var bool g2_downOrder = false
+var bool g3_upOrder = false
+var bool g3_downOrder = false
 
 // ========== Khi có pivot mới ==========
 acceptedPH_event := false
 acceptedPL_event := false
 
 if (isPH or isPL)
-    accept = true
-    tvar   = "NA"
-    if useVariantFilter
-        tvar := classifyPivotVariant(isPH)
-        accept := (tvar != "NA") and allowedByUser(tvar)
+    // ========== BẮT BUỘC lọc theo variant - KHÔNG detect pivot thuần ==========
+    tvar = classifyPivotVariant(isPH)
+    accept = (tvar != "NA") and allowedByUser(tvar)
 
     if accept
-        // --- Sửa: Chèn pivot giả nếu hai liên tiếp cùng loại ---
+        // --- chèn pivot giả nếu 2 pivot liên tiếp cùng loại (giữ nguyên cơ chế của bạn) ---
         if pCount() > 0
             [lastBar, lastPrice, lastHigh] = getPivotFromEnd(0)
             newHigh = isPH
-            
             if lastHigh == newHigh
                 gap = newPivotBar - lastBar - 1
                 if gap > 0
-                    // Tính offset đúng: từ nến sau lastBar đến nến trước newPivotBar
                     firstBarInGap = lastBar + 1
                     lastBarInGap  = newPivotBar - 1
-                    
-                    // Offset từ bar hiện tại
-                    offsetFirst = bar_index - firstBarInGap
-                    offsetLast  = bar_index - lastBarInGap
-                    
+                    offsetFirst   = bar_index - firstBarInGap
+                    offsetLast    = bar_index - lastBarInGap
                     if offsetFirst >= 0 and offsetLast >= 0
-                        // Khởi tạo với nến đầu tiên trong gap
                         float insertPrice = newHigh ? low[offsetFirst] : high[offsetFirst]
                         int   insertBar   = firstBarInGap
                         bool  insertHigh  = not newHigh
-                        
-                        // Loop qua tất cả nến trong gap (từ offsetFirst đến offsetLast)
                         for i = offsetFirst to offsetLast
                             float candidate = newHigh ? low[i] : high[i]
                             if (newHigh and candidate < insertPrice) or (not newHigh and candidate > insertPrice)
                                 insertPrice := candidate
                                 insertBar   := bar_index - i
-                        
-                        // Kiểm tra insertBar hợp lệ (giữa hai pivot)
                         if insertBar > lastBar and insertBar < newPivotBar
                             storePivot(insertBar, insertPrice, insertHigh)
-                            
                             if drawWaves and not na(lastPivotBar)
                                 line.new(lastPivotBar, lastPivotPrice, insertBar, insertPrice, color=color.new(color.blue, 0), width=2)
-                            
                             lastPivotBar   := insertBar
                             lastPivotPrice := insertPrice
-        
+
         // Lưu pivot mới
         storePivot(newPivotBar, newPivotPrice, newPivotHigh)
         if drawWaves and not na(lastPivotBar)
-            line.new(lastPivotBar, lastPivotPrice, newPivotBar, newPivotPrice,  color=color.new(color.blue, 0), width=2)
+            line.new(lastPivotBar, lastPivotPrice, newPivotBar, newPivotPrice, color=color.new(color.blue, 0), width=2)
         lastPivotBar   := newPivotBar
         lastPivotPrice := newPivotPrice
 
-        if not na(lastSixBarIdx) and newPivotBar > lastSixBarIdx
+        // reset khóa CHoCH khi đã hình thành pivot sau cụm 8 trước đó
+        if not na(lastEightBarIdx) and newPivotBar > lastEightBarIdx
             chochLocked := false
+
         acceptedPH_event := isPH
         acceptedPL_event := isPL
 
@@ -200,77 +276,166 @@ if (isPH or isPL)
             label.new(newPivotBar, newPivotPrice, tvar, style=label.style_label_center,
                       textcolor=color.white, color=color.new(color.black, 10), size=size.tiny)
 
-// ========== 6-Pattern & CHoCH (giữ nguyên ngoài phần CHoCH) ==========
-var float pivot4 = na
-sixReady = pCount() >= 6
-if sixReady
-    [b6,p6,h6] = getPivotFromEnd(0)
-    [b5,p5,h5] = getPivotFromEnd(1)
-    [b4,p4,h4] = getPivotFromEnd(2)
-    [b3,p3,h3] = getPivotFromEnd(3)
-    [b2,p2,h2] = getPivotFromEnd(4)
-    [b1,p1,h1] = getPivotFromEnd(5)
+// ========== 8-Pattern ==========
+var float pivot6 = na   // p6 (reference cho CHoCH)
+var float pivot5 = na   // p5 (additional reference cho CHoCH)
+var float saved_p5 = na // Store p5 for pattern group confirmation
+var float saved_p7 = na // Store p7 for pattern group confirmation (G2)
+eightReady = pCount() >= 8
+if eightReady
+    [b8,p8,h8] = getPivotFromEnd(0)
+    [b7,p7,h7] = getPivotFromEnd(1)
+    [b6,p6,h6] = getPivotFromEnd(2)
+    [b5,p5,h5] = getPivotFromEnd(3)
+    [b4,p4,h4] = getPivotFromEnd(4)
+    [b3,p3,h3] = getPivotFromEnd(5)
+    [b2,p2,h2] = getPivotFromEnd(6)
+    [b1,p1,h1] = getPivotFromEnd(7)
 
+    // cấu trúc xen kẽ 8 pivot
+    upStruct   = (not h1) and h2 and (not h3) and h4 and (not h5) and h6 and (not h7) and h8
+    downStruct = h1 and (not h2) and h3 and (not h4) and h5 and (not h6) and h7 and (not h8)
+
+    // Retest P7 ↔ P4 (thay vì P5 ↔ P2)
+    off7 = math.max(0, bar_index - b7)
+    off4 = math.max(0, bar_index - b4)
+    hi7 = high[off7]
+    lo7 = low[off7]
+    hi4 = high[off4]
+    lo4 = low[off4]
+    touchRetest = (upStruct and (lo7 < hi4)) or (downStruct and (hi7 > lo4))
+
+    // P8 là cực trị trong cụm 1–8
+    highsArr  = array.from(p1, p2, p3, p4, p5, p6, p7, p8)
+    lowsArr   = array.from(p1, p2, p3, p4, p5, p6, p7, p8)
+    isHighest8 = p8 == array.max(highsArr)
+    isLowest8  = p8 == array.min(lowsArr)
+
+    // Ràng buộc thứ tự 8-pivot - 3 nhóm (G1, G2, G3)
+    // G1 (Original):
+    g1_upOrder   := (p2 < p4 and p4 < p6 and p6 < p8) and (p3 < p5 and p5 < p7)
+    g1_downOrder := (p3 > p5 and p5 > p7) and (p2 > p4 and p4 > p6 and p6 > p8)
     
-    // cấu trúc xen kẽ (vị trí High/Low)
-    upStruct   = (not h1) and h2 and (not h3) and h4 and (not h5) and h6
-    downStruct = h1 and (not h2) and h3 and (not h4) and h5 and (not h6)
+    // G2:
+    // Uptrend: p3 < p7 < p5, p2 < p6 < p4 < p8, p2 < p5
+    g2_upOrder   := (p3 < p7 and p7 < p5) and (p2 < p6 and p6 < p4 and p4 < p8) and (p2 < p5)
+    // Downtrend: p3 > p7 > p5, p2 > p6 > p4 > p8, p2 > p5
+    g2_downOrder := (p3 > p7 and p7 > p5) and (p2 > p6 and p6 > p4 and p4 > p8) and (p2 > p5)
+    
+    // G3:
+    // Uptrend: p3 < p5 < p7, p2 < p6 < p4 < p8, p2 < p5
+    g3_upOrder   := (p3 < p5 and p5 < p7) and (p2 < p6 and p6 < p4 and p4 < p8) and (p2 < p5)
+    // Downtrend: p3 > p5 > p7, p2 > p6 > p4 > p8, p2 > p5
+    g3_downOrder := (p3 > p5 and p5 > p7) and (p2 > p6 and p6 > p4 and p4 > p8) and (p2 > p5)
+    
+    // Combined order check (bất kỳ nhóm nào hợp lệ)
+    upOrderOK   = g1_upOrder or g2_upOrder or g3_upOrder
+    downOrderOK = g1_downOrder or g2_downOrder or g3_downOrder
 
-    // ===== Kiểm tra P5 retest lại P2  =====
+    // Điều kiện breakout mới
     off5 = math.max(0, bar_index - b5)
+    off3 = math.max(0, bar_index - b3)
     off2 = math.max(0, bar_index - b2)
-
-    hi5 = high[off5]
+    off1 = math.max(0, bar_index - b1)
+    
     lo5 = low[off5]
     hi2 = high[off2]
+    lo3 = low[off3]
+    lo1 = low[off1]
+    hi5 = high[off5]
     lo2 = low[off2]
+    hi3 = high[off3]
+    hi1 = high[off1]
+    
+    upBreakout   = (lo5 > hi2) 
+    downBreakout = (hi5 < lo2) 
 
-    // Logic retest mới:
-    // - Nếu uptrend → low5 < high2
-    // - Nếu downtrend → high5 > low2
-    touchRetest = (upStruct and (lo5 < hi2)) or (downStruct and (hi5 > lo2))
+    // Mẫu hợp lệ với điều kiện breakout phù hợp
+    // Uptrend pattern + UP breakout conditions
+    lastEightUp   := upStruct   and upOrderOK   and touchRetest and isHighest8 and upBreakout
+    // Downtrend pattern + DOWN breakout conditions
+    lastEightDown := downStruct and downOrderOK and touchRetest and isLowest8  and downBreakout
 
-    // ===== Kiểm tra P6 có là cực trị trong cụm 1–6 =====
-    highsArr = array.from(p1, p2, p3, p4, p5, p6)
-    lowsArr  = array.from(p1, p2, p3, p4, p5, p6)
-    isHighest6 = p6 == array.max(highsArr)
-    isLowest6  = p6 == array.min(lowsArr)
+    // Lưu pivots khi mẫu hợp lệ
+    if (lastEightDown or lastEightUp)
+        pivot5 := p5
+        pivot6 := p6
+        // Store pivot values for confirmation logic
+        saved_p5 := p5
+        saved_p7 := p7
 
-    // ====== ★ RÀNG BUỘC THỨ TỰ 6 PIVOT (HH/HL hoặc LH/LL) ======
-    // Uptrend:   p2 < p4 < p6  và  p1 < p3 < p5
-    // Downtrend: p1 > p3 > p5  và  p2 > p4 > p6
-    upOrderOK   = (p2 < p4 and p4 < p6) and (p1 < p3 and p3 < p5)
-    downOrderOK = (p1 > p3 and p3 > p5) and (p2 > p4 and p4 > p6)
+    lastEightBarIdx := b8
+    p2_price        := p2
 
-    // Xác nhận mẫu 6 điểm CHỈ khi thỏa cấu trúc + retest + cực trị + thứ tự
-    lastSixUp   := upStruct   and upOrderOK   and touchRetest and isHighest6
-    lastSixDown := downStruct and downOrderOK and touchRetest and isLowest6
-
-    if (lastSixDown or lastSixUp)
-        pivot4 := p4
-    // Ghi nhớ vị trí pivot cuối để dùng cho CHoCH
-    lastSixBarIdx := b6
-    p2_price      := p2
-
-// ---- Sau khi đã có sixReady ----
-isAfterSix = sixReady and (bar_index > nz(lastSixBarIdx))
+// ---- Sau khi đã có eightReady ----
+isAfterEight = eightReady and (bar_index > nz(lastEightBarIdx))
 
 var bool fireChochUp = false
 var bool fireChochDn = false
+var string matchedGroup = na  // Track which pattern group matched
 
-if sixReady
-    // ======= CHỈ SỬA DUY NHẤT LOGIC CHoCH TẠI ĐÂY =======
-    // CHoCH Up:  low[0] > low[1]  và  close[0] > high[1]
-    // CHoCH Down: high[0] < high[1] và close[0] < low[1]
-    chochUpBar   = (low > low[1])   and (close > high[1]) and (close > pivot4)
-    chochDownBar = (high < high[1]) and (close < low[1]) and (close < pivot4)
+if eightReady and not na(pivot6) and not na(pivot5)
+    // ========== 3-CANDLE CHoCH CONFIRMATION (matching Python logic) ==========
+    // Pre-CHoCH [2] → CHoCH Bar [1] → Confirmation [0]
+    
+    // CHoCH Bar conditions (nến [1] - previous bar)
+    // CHoCH Up: low[1] > low[2] AND close[1] > high[2] AND close[1] > pivot6 AND close[1] < pivot5
+    chochUpBar = (low[1] > low[2]) and (close[1] > high[2]) and 
+                 (close[1] > pivot6) and (close[1] < pivot5)
+    
+    // CHoCH Down: high[1] < high[2] AND close[1] < low[2] AND close[1] < pivot6 AND close[1] > pivot5
+    chochDownBar = (high[1] < high[2]) and (close[1] < low[2]) and 
+                   (close[1] < pivot6) and (close[1] > pivot5)
 
-    // Gắn với cấu trúc 6-point và chỉ phát một lần giữa P6–P7
-    baseUp   = isAfterSix and lastSixDown and chochUpBar
-    baseDown = isAfterSix and lastSixUp   and chochDownBar
+    // Confirmation conditions - Basic (nến [0] - current bar)
+    // CHoCH Up confirmed: current low > high của nến pre-CHoCH [2]
+    confirmUpBasic = (low > high[2])
+    
+    // CHoCH Down confirmed: current high < low của nến pre-CHoCH [2]
+    confirmDownBasic = (high < low[2])
 
-    fireChochUp := (not chochLocked) and baseUp
-    fireChochDn := (not chochLocked) and baseDown
+    // Match with pattern direction
+    baseUp   = isAfterEight and lastEightDown and chochUpBar and confirmUpBasic
+    baseDown = isAfterEight and lastEightUp   and chochDownBar and confirmDownBasic
+
+    // ========== PATTERN GROUP SPECIFIC CONDITIONS for Confirmation Candle ==========
+    // Determine which group matched
+    if lastEightUp
+        matchedGroup := g1_upOrder ? "G1" : (g2_upOrder ? "G2" : "G3")
+    else if lastEightDown
+        matchedGroup := g1_downOrder ? "G1" : (g2_downOrder ? "G2" : "G3")
+
+    // Apply pattern group conditions
+    confirmUp = false
+    confirmDown = false
+    
+    if baseUp and not na(matchedGroup)
+        // Downtrend → CHoCH Up
+        if matchedGroup == "G1"
+            // G1: Close_CF <= HIGH_5
+            confirmUp := close <= saved_p5
+        else if matchedGroup == "G2"
+            // G2: Close_CF <= HIGH_7
+            confirmUp := close <= saved_p7
+        else if matchedGroup == "G3"
+            // G3: Close_CF <= HIGH_5
+            confirmUp := close <= saved_p5
+    
+    if baseDown and not na(matchedGroup)
+        // Uptrend → CHoCH Down
+        if matchedGroup == "G1"
+            // G1: Close_CF >= LOW_5
+            confirmDown := close >= saved_p5
+        else if matchedGroup == "G2"
+            // G2: Close_CF >= LOW_7
+            confirmDown := close >= saved_p7
+        else if matchedGroup == "G3"
+            // G3: Close_CF >= LOW_5
+            confirmDown := close >= saved_p5
+
+    // Fire signal với locking
+    fireChochUp := (not chochLocked) and confirmUp
+    fireChochDn := (not chochLocked) and confirmDown
 
     if fireChochUp or fireChochDn
         chochLocked := true
@@ -278,16 +443,5 @@ if sixReady
 // ========== Plot ==========
 plotshape(fireChochUp,  title="CHoCH Up",   style=shape.labelup,   text="CH↑",
           color=color.new(color.teal, 0),   textcolor=color.white, location=location.belowbar, size=size.tiny)
-
 plotshape(fireChochDn,  title="CHoCH Down", style=shape.labeldown, text="CH↓",
           color=color.new(color.orange, 0), textcolor=color.white, location=location.abovebar, size=size.tiny)
-
-// ========== Labels P1-P6 ==========
-if plotSixLbl and sixReady
-    [b6_,p6_,h6_] = getPivotFromEnd(0)
-    [b5_,p5_,h5_] = getPivotFromEnd(1)
-    [b4_,p4_,h4_] = getPivotFromEnd(2)
-    [b3_,p3_,h3_] = getPivotFromEnd(3)
-    [b2_,p2_,h2_] = getPivotFromEnd(4)
-    [b1_,p1_,h1_] = getPivotFromEnd(5)
-    // label mẫu giữ nguyên dạng comment
