@@ -582,10 +582,29 @@
                         <label for="dateFilter">
                             <i class="fas fa-calendar"></i> Ngày
                         </label>
-                        <select id="dateFilter">
-                            <option value="">All Dates</option>
+                        <select id="dateFilter" onchange="toggleCustomDateRange()">
                             <option value="today" selected>Hôm nay</option>
+                            <option value="all">Tất cả các ngày</option>
+                            <option value="custom">Tùy chọn ngày...</option>
                         </select>
+                    </div>
+                </div>
+                
+                <!-- Custom Date Range Picker (hidden by default) -->
+                <div id="customDateRange" style="display: none; margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 6px;">
+                    <div class="filter-row">
+                        <div class="filter-group">
+                            <label for="startDate">
+                                <i class="fas fa-calendar-day"></i> Từ ngày
+                            </label>
+                            <input type="date" id="startDate" class="form-control" style="font-size: 11px; padding: 6px;">
+                        </div>
+                        <div class="filter-group">
+                            <label for="endDate">
+                                <i class="fas fa-calendar-day"></i> Đến ngày
+                            </label>
+                            <input type="date" id="endDate" class="form-control" style="font-size: 11px; padding: 6px;">
+                        </div>
                     </div>
                 </div>
                 

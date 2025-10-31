@@ -28,7 +28,9 @@ let currentFilters = {
     timeframes: [],
     directions: [],
     patterns: [],
-    date: 'today'  // Default to today
+    date: 'today',  // Default to today
+    startDate: '',
+    endDate: ''
 };
 
 // Unique values for filter options
@@ -122,14 +124,24 @@ async function loadAlertsFromAPI(limit = 500) {
     try {
         console.log(`📥 Loading alerts from API (limit: ${limit})...`);
         
-        // Build query parameters - include date filter by default
+        // Build query parameters
         const params = new URLSearchParams();
         params.append('limit', limit);
         
-        // Apply date filter (default is 'today')
-        if (currentFilters.date) {
+        // Apply date filter
+        if (currentFilters.date === 'custom' && (currentFilters.startDate || currentFilters.endDate)) {
+            // Use custom date range
+            if (currentFilters.startDate) {
+                params.append('start_date', currentFilters.startDate);
+            }
+            if (currentFilters.endDate) {
+                params.append('end_date', currentFilters.endDate);
+            }
+        } else if (currentFilters.date && currentFilters.date !== 'all') {
+            // Use predefined date filter (today or specific date)
             params.append('date_filter', currentFilters.date);
         }
+        // If 'all', don't add any date filter
         
         const response = await fetch(`/api/alerts?${params.toString()}`);
         if (!response.ok) {
@@ -227,6 +239,20 @@ function isToday(timeString) {
                date.getFullYear() === today.getFullYear();
     } catch (e) {
         return false;
+    }
+}
+
+/**
+ * Toggle custom date range picker visibility
+ */
+function toggleCustomDateRange() {
+    const dateFilter = document.getElementById('dateFilter').value;
+    const customDateRange = document.getElementById('customDateRange');
+    
+    if (dateFilter === 'custom') {
+        customDateRange.style.display = 'block';
+    } else {
+        customDateRange.style.display = 'none';
     }
 }
 
@@ -400,8 +426,9 @@ function alertPassesFilters(alert) {
         }
     }
     
-    // Check date filter
-    if (currentFilters.date === 'today') {
+    // Date filtering is handled by API, not client-side
+    // Only apply client-side date filter if date is 'today' and we're filtering real-time alerts
+    if (currentFilters.date === 'today' && !alert.fromAPI) {
         if (!isToday(alert.time_date)) {
             return false;
         }
@@ -418,30 +445,19 @@ function applyFilters() {
     currentFilters.patterns = getSelectedValues('patternFilter');
     currentFilters.date = document.getElementById('dateFilter').value;
     
-    // Apply filters to all alerts
-    filteredAlerts = applyCurrentFilters(allAlerts);
-    
-    // Reset to page 1 and recalculate pagination
-    currentPage = 1;
-    totalPages = Math.ceil(filteredAlerts.length / itemsPerPage);
-    
-    // Display first page
-    displayCurrentPage();
-    
-    // Update alert count
-    updateAlertCount(filteredAlerts.length);
-    
-    // Update active filters display
-    updateActiveFiltersDisplay();
-    
-    // Show/hide pagination
-    if (filteredAlerts.length > itemsPerPage) {
-        showPagination();
+    // Get custom date range if selected
+    if (currentFilters.date === 'custom') {
+        currentFilters.startDate = document.getElementById('startDate').value;
+        currentFilters.endDate = document.getElementById('endDate').value;
     } else {
-        hidePagination();
+        currentFilters.startDate = '';
+        currentFilters.endDate = '';
     }
     
-    console.log(`🔍 Applied filters: ${filteredAlerts.length}/${allAlerts.length} alerts found, showing page ${currentPage} of ${totalPages}`);
+    // Reload data from API with new date filters
+    loadAlertsFromAPI();
+    
+    console.log(`🔍 Applied filters:`, currentFilters);
 }
 
 function clearFilters() {
@@ -451,35 +467,25 @@ function clearFilters() {
         timeframes: [],
         directions: [],
         patterns: [],
-        date: ''
+        date: 'today',  // Reset to default (today)
+        startDate: '',
+        endDate: ''
     };
     
     // Clear all select values
-    ['symbolFilter', 'timeframeFilter', 'directionFilter', 'patternFilter', 'dateFilter'].forEach(id => {
+    ['symbolFilter', 'timeframeFilter', 'directionFilter', 'patternFilter'].forEach(id => {
         const select = document.getElementById(id);
         Array.from(select.options).forEach(option => option.selected = false);
     });
     
-    // Reset filtered alerts and pagination
-    filteredAlerts = [...allAlerts];
-    currentPage = 1;
-    totalPages = Math.ceil(filteredAlerts.length / itemsPerPage);
+    // Reset date filter to today
+    document.getElementById('dateFilter').value = 'today';
+    document.getElementById('startDate').value = '';
+    document.getElementById('endDate').value = '';
+    toggleCustomDateRange();
     
-    // Display first page
-    displayCurrentPage();
-    
-    // Update alert count
-    updateAlertCount();
-    
-    // Clear active filters display
-    updateActiveFiltersDisplay();
-    
-    // Show/hide pagination
-    if (filteredAlerts.length > itemsPerPage) {
-        showPagination();
-    } else {
-        hidePagination();
-    }
+    // Reload data from API
+    loadAlertsFromAPI();
     
     console.log('🗑️ Cleared all filters');
 }
@@ -509,6 +515,28 @@ function updateActiveFiltersDisplay() {
         tag.innerHTML = `
             <i class="fas fa-calendar"></i>
             Ngày: Hôm nay
+            <span class="remove" onclick="removeDateFilter()">×</span>
+        `;
+        activeFiltersContainer.appendChild(tag);
+    } else if (currentFilters.date === 'all') {
+        const tag = document.createElement('div');
+        tag.className = 'filter-tag';
+        tag.innerHTML = `
+            <i class="fas fa-calendar"></i>
+            Ngày: Tất cả
+            <span class="remove" onclick="removeDateFilter()">×</span>
+        `;
+        activeFiltersContainer.appendChild(tag);
+    } else if (currentFilters.date === 'custom' && (currentFilters.startDate || currentFilters.endDate)) {
+        const dateRange = [];
+        if (currentFilters.startDate) dateRange.push(`Từ ${currentFilters.startDate}`);
+        if (currentFilters.endDate) dateRange.push(`Đến ${currentFilters.endDate}`);
+        
+        const tag = document.createElement('div');
+        tag.className = 'filter-tag';
+        tag.innerHTML = `
+            <i class="fas fa-calendar-alt"></i>
+            ${dateRange.join(' ')}
             <span class="remove" onclick="removeDateFilter()">×</span>
         `;
         activeFiltersContainer.appendChild(tag);
@@ -549,8 +577,13 @@ function removeFilter(filterType, value) {
 }
 
 function removeDateFilter() {
-    currentFilters.date = '';
-    document.getElementById('dateFilter').value = '';
+    currentFilters.date = 'today';  // Reset to default
+    currentFilters.startDate = '';
+    currentFilters.endDate = '';
+    document.getElementById('dateFilter').value = 'today';
+    document.getElementById('startDate').value = '';
+    document.getElementById('endDate').value = '';
+    toggleCustomDateRange();
     applyFilters();
 }
 

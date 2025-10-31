@@ -73,7 +73,9 @@ def get_alerts():
         timeframes = request.args.getlist('timeframe') 
         directions = request.args.getlist('direction')
         signal_types = request.args.getlist('signal_type')
-        date_filter = request.args.get('date_filter', '')  # 'today' or empty
+        date_filter = request.args.get('date_filter', '')  # 'today', 'all', or 'YYYY-MM-DD'
+        start_date = request.args.get('start_date', '')  # 'YYYY-MM-DD'
+        end_date = request.args.get('end_date', '')  # 'YYYY-MM-DD'
         
         # Get filtered alerts
         if any([symbols, timeframes, directions, signal_types]):
@@ -89,14 +91,47 @@ def get_alerts():
             alerts = db.get_recent_alerts(limit=limit, offset=offset)
         
         # Apply date filter if needed
+        now_gmt7 = datetime.now(GMT7)
+        
         if date_filter == 'today':
             # Get today's date in GMT+7
-            now_gmt7 = datetime.now(GMT7)
             today_start = now_gmt7.replace(hour=0, minute=0, second=0, microsecond=0)
             
             # Filter alerts from today
             alerts = [alert for alert in alerts 
                      if datetime.fromisoformat(alert['time_date'].replace('Z', '+00:00')).astimezone(GMT7) >= today_start]
+        
+        elif date_filter and date_filter != 'all':
+            # Specific date filter (YYYY-MM-DD format)
+            try:
+                filter_date = datetime.strptime(date_filter, '%Y-%m-%d')
+                filter_date = GMT7.localize(filter_date.replace(hour=0, minute=0, second=0, microsecond=0))
+                filter_date_end = filter_date + timedelta(days=1)
+                
+                alerts = [alert for alert in alerts 
+                         if filter_date <= datetime.fromisoformat(alert['time_date'].replace('Z', '+00:00')).astimezone(GMT7) < filter_date_end]
+            except ValueError:
+                logger.warning(f"Invalid date format: {date_filter}")
+        
+        elif start_date or end_date:
+            # Date range filter
+            try:
+                if start_date:
+                    start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+                    start_dt = GMT7.localize(start_dt.replace(hour=0, minute=0, second=0, microsecond=0))
+                else:
+                    start_dt = datetime.min.replace(tzinfo=GMT7)
+                
+                if end_date:
+                    end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+                    end_dt = GMT7.localize(end_dt.replace(hour=23, minute=59, second=59, microsecond=999999))
+                else:
+                    end_dt = now_gmt7
+                
+                alerts = [alert for alert in alerts 
+                         if start_dt <= datetime.fromisoformat(alert['time_date'].replace('Z', '+00:00')).astimezone(GMT7) <= end_dt]
+            except ValueError as e:
+                logger.warning(f"Invalid date range: {e}")
         
         return jsonify({
             'alerts': alerts,
