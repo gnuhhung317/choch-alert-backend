@@ -340,13 +340,13 @@ if eightReady and not na(pivot6) and not na(pivot5)
     // Pre-CHoCH [2] → CHoCH Bar [1] → Confirmation [0]
     
     // CHoCH Bar conditions (nến [1] - previous bar)
-    // CHoCH Up: low[1] > low[2] AND close[1] > high[2] AND close[1] > pivot6 AND close[1] < pivot5
+    // CHoCH Up: low[1] > low[2] AND close[1] > high[2] AND close[1] > pivot6 AND close[1] < pivot2
     chochUpBar = (low[1] > low[2]) and (close[1] > high[2]) and 
-                 (close[1] > pivot6) and (close[1] < pivot5)
+                 (close[1] > pivot6) and (close[1] < p2_price)
     
-    // CHoCH Down: high[1] < high[2] AND close[1] < low[2] AND close[1] < pivot6 AND close[1] > pivot5
+    // CHoCH Down: high[1] < high[2] AND close[1] < low[2] AND close[1] < pivot6 AND close[1] > pivot2
     chochDownBar = (high[1] < high[2]) and (close[1] < low[2]) and 
-                   (close[1] < pivot6) and (close[1] > pivot5)
+                   (close[1] < pivot6) and (close[1] > p2_price)
 
     // Confirmation conditions - Basic (nến [0] - current bar)
     // CHoCH Up confirmed: current low > high của nến pre-CHoCH [2]

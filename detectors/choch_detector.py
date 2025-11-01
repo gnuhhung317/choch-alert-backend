@@ -404,8 +404,12 @@ class ChochDetector:
                     current_idx: int) -> Tuple[bool, bool]:
         """
         Kiểm tra CHoCH với confirmation (CHỈ SỬ DỤNG CLOSED CANDLES):
-        - CHoCH Up: Nến sau CHoCH phải có low > high của nến trước CHoCH
-        - CHoCH Down: Nến sau CHoCH phải có high < low của nến trước CHoCH
+        - CHoCH Up: Nến sau CHoCH phải có low > high của nến trước CHoCH AND close <= pivot2
+        - CHoCH Down: Nến sau CHoCH phải có high < low của nến trước CHoCH AND close >= pivot2
+        
+        CHoCH Bar Conditions:
+        - CHoCH Up: close[CHoCH] < pivot2 (không vượt quá pivot2)
+        - CHoCH Down: close[CHoCH] > pivot2 (không vượt quá pivot2)
         
         IMPORTANT: Tất cả nến (pre-CHoCH, CHoCH, confirmation) đều phải đã ĐÓNG
         
@@ -482,17 +486,17 @@ class ChochDetector:
             return False, False
 
         # CHoCH conditions on previous bar (nến CHoCH - ĐÃ ĐÓNG)
-        # CHoCH Up: low[prev] > low[pre_prev] AND close[prev] > high[pre_prev] AND close[prev] > pivot6 AND close[prev] < pivot5
+        # CHoCH Up: low[prev] > low[pre_prev] AND close[prev] > high[pre_prev] AND close[prev] > pivot6 AND close[prev] < pivot2
         choch_up_bar = (prev['low'] > pre_prev['low'] and 
                        prev['close'] > pre_prev['high'] and 
                        prev['close'] > state.pivot6 and
-                       prev['close'] < state.pivot5)
+                       prev['close'] < p2)
         
-        # CHoCH Down: high[prev] < high[pre_prev] AND close[prev] < low[pre_prev] AND close[prev] < pivot6 AND close[prev] > pivot5
+        # CHoCH Down: high[prev] < high[pre_prev] AND close[prev] < low[pre_prev] AND close[prev] < pivot6 AND close[prev] > pivot2
         choch_down_bar = (prev['high'] < pre_prev['high'] and 
                          prev['close'] < pre_prev['low'] and 
                          prev['close'] < state.pivot6 and
-                         prev['close'] > state.pivot5)
+                         prev['close'] > p2)
 
         # Match with pattern direction
         base_up = is_after_eight and state.last_eight_down and choch_up_bar

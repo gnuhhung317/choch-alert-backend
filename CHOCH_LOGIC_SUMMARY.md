@@ -41,20 +41,20 @@ Nến CHoCH phải thỏa mãn **ĐỒNG THỜI** 4 điều kiện:
 1. **Low > Low trước đó**: Low của nến CHoCH cao hơn low của nến ngay trước
 2. **Close > High trước đó**: Close của nến CHoCH cao hơn high của nến ngay trước
 3. **Close > Pivot 6**: Close phá vỡ lên trên pivot 6
-4. **Close < Pivot 5**: Close vẫn nằm dưới pivot 5
+4. **Close < Pivot 2**: Close không được vượt quá pivot 2
 
 ### CHoCH Down (sau uptrend pattern)
 Nến CHoCH phải thỏa mãn **ĐỒNG THỜI** 4 điều kiện:
 1. **High < High trước đó**: High của nến CHoCH thấp hơn high của nến ngay trước
 2. **Close < Low trước đó**: Close của nến CHoCH thấp hơn low của nến ngay trước
 3. **Close < Pivot 6**: Close phá vỡ xuống dưới pivot 6
-4. **Close > Pivot 5**: Close vẫn nằm trên pivot 5
+4. **Close > Pivot 2**: Close không được vượt quá pivot 2
 
 ## 4. Nến Confirmation (Xác Nhận)
 
 ### Điều Kiện Cơ Bản
-- **CHoCH Up**: Low của nến confirmation > High của nến trước CHoCH
-- **CHoCH Down**: High của nến confirmation < Low của nến trước CHoCH
+- **CHoCH Up**: Low của nến confirmation > High của nến trước CHoCH **VÀ** Close confirmation ≤ Pivot 2
+- **CHoCH Down**: High của nến confirmation < Low của nến trước CHoCH **VÀ** Close confirmation ≥ Pivot 2
 
 ### Điều Kiện Theo Nhóm Pattern
 
@@ -122,16 +122,16 @@ Volume của nến CHoCH phải là lớn nhất trong cụm {Vol4, Vol5, Vol6}:
 
 ### CHoCH Up G1:
 1. **8-pivot downtrend** được xác nhận
-2. **Nến CHoCH**: Low > Low_trước, Close > High_trước, Close > P6, Close < P5
+2. **Nến CHoCH**: Low > Low_trước, Close > High_trước, Close > P6, Close < P2
 3. **Volume**: Thỏa mãn (678_ok AND 456_ok) OR 45678_ok
-4. **Confirmation**: Low_confirmation > High_preCHoCH, Close_confirmation ≤ P5
+4. **Confirmation**: Low_confirmation > High_preCHoCH, Close_confirmation ≤ P2, Close_confirmation ≤ P5
 5. **Kết quả**: Tín hiệu Long tại giá Close của nến CHoCH
 
 ### CHoCH Down G2:
 1. **8-pivot uptrend** được xác nhận
-2. **Nến CHoCH**: High < High_trước, Close < Low_trước, Close < P6, Close > P5
+2. **Nến CHoCH**: High < High_trước, Close < Low_trước, Close < P6, Close > P2
 3. **Volume**: Vol_CHoCH = max(Vol4, Vol5, Vol6)
-4. **Confirmation**: High_confirmation < Low_preCHoCH, Close_confirmation ≥ P7
+4. **Confirmation**: High_confirmation < Low_preCHoCH, Close_confirmation ≥ P2, Close_confirmation ≥ P7
 5. **Kết quả**: Tín hiệu Short tại giá Close của nến CHoCH
 
 ---

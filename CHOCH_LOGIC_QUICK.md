@@ -20,23 +20,23 @@ CHoCH là tín hiệu breakout mạnh mẽ dựa trên 8 pivot points + 3 nến 
 
 ## 🔥 Nến CHoCH (4 Điều Kiện)
 
-### CHoCH Up (sau downtrend)
+### CHoCH Up (4 điều kiện)
 1. `low[CHoCH] > low[trước]`
 2. `close[CHoCH] > high[trước]`
 3. `close[CHoCH] > pivot6`
-4. `close[CHoCH] < pivot5`
+4. `close[CHoCH] < pivot2`  // **THAY ĐỔI**: Không vượt quá pivot2
 
-### CHoCH Down (sau uptrend)
+### CHoCH Down (4 điều kiện)
 1. `high[CHoCH] < high[trước]`
 2. `close[CHoCH] < low[trước]`
 3. `close[CHoCH] < pivot6`
-4. `close[CHoCH] > pivot5`
+4. `close[CHoCH] > pivot2`  // **THAY ĐỔI**: Không vượt quá pivot2
 
 ## ✅ Nến Confirmation
 
 ### Điều Kiện Cơ Bản
-- **Up**: `low[confirmation] > high[pre-CHoCH]`
-- **Down**: `high[confirmation] < low[pre-CHoCH]`
+- **Up**: `low[confirmation] > high[pre-CHoCH]` **VÀ** `close[confirmation] <= pivot2`
+- **Down**: `high[confirmation] < low[pre-CHoCH]` **VÀ** `close[confirmation] >= pivot2`
 
 ### Theo Nhóm Pattern
 | Hướng | G1 | G2 | G3 |
@@ -76,8 +76,8 @@ Vol4/Vol5/Vol_CHoCH = max(Vol4,Vol5,Vol6)
 ### CHoCH Up G1
 ```
 Downtrend 8-pivot ✓
-Nến CHoCH: low↑, close>high_trước, >P6, <P5 ✓
-Confirmation: low > high_preCHoCH, close ≤ P5 ✓
+Nến CHoCH: low↑, close>high_trước, >P6, <P2 ✓
+Confirmation: low > high_preCHoCH, close ≤ P2, close ≤ P5 ✓
 Volume: (678_ok AND 456_ok) OR 45678_ok ✓
 → 🟢 LONG Signal
 ```
@@ -85,8 +85,8 @@ Volume: (678_ok AND 456_ok) OR 45678_ok ✓
 ### CHoCH Down G2
 ```
 Uptrend 8-pivot ✓
-Nến CHoCH: high↓, close<low_trước, <P6, >P5 ✓
-Confirmation: high < low_preCHoCH, close ≥ P7 ✓
+Nến CHoCH: high↓, close<low_trước, <P6, >P2 ✓
+Confirmation: high < low_preCHoCH, close ≥ P2, close ≥ P7 ✓
 Volume: Vol_CHoCH = max(Vol4,Vol5,Vol6) ✓
 → 🔴 SHORT Signal
 ```
