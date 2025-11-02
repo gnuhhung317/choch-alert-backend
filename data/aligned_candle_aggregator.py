@@ -48,6 +48,7 @@ class AlignedCandleAggregator:
         '20m': datetime(2025, 10, 24, 17, 20, 0),  # Can use any midnight, but use this for consistency
         '25m': datetime(2025, 10, 24, 17, 5, 0),   # MUST use this specific time (doesn't align to midnight)
         '40m': datetime(2025, 10, 24, 16, 40, 0),  # Can use any midnight, but use this for consistency
+        '45m': datetime(2025, 10, 24, 0, 0, 0),  # 45m timeframe reference
         '50m': datetime(2025, 10, 20, 0, 0, 0),    # Generic Monday midnight
     }
     

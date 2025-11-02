@@ -292,21 +292,40 @@ class ChochDetector:
     
     def check_eight_pattern(self, state: TimeframeState, df: pd.DataFrame) -> bool:
         """
-        Check for valid 8-pivot pattern
+        Check for valid 8-pivot pattern (or 10-pivot for G4/G5)
         Returns True if pattern is valid and updates state
         """
         if state.pivot_count() < 8:
             return False
         
-        # Get last 8 pivots
-        b8, p8, h8 = state.get_pivot_from_end(0)
-        b7, p7, h7 = state.get_pivot_from_end(1)
-        b6, p6, h6 = state.get_pivot_from_end(2)
-        b5, p5, h5 = state.get_pivot_from_end(3)
-        b4, p4, h4 = state.get_pivot_from_end(4)
-        b3, p3, h3 = state.get_pivot_from_end(5)
-        b2, p2, h2 = state.get_pivot_from_end(6)
-        b1, p1, h1 = state.get_pivot_from_end(7)
+        # Check if we have 10 pivots for G4/G5 groups
+        ten_ready = state.pivot_count() >= 10
+        
+        # Get pivots based on availability
+        if ten_ready:
+            # Map to 10-pivot pattern (p1 = oldest, p10 = newest)
+            b10, p10, h10 = state.get_pivot_from_end(0)
+            b9, p9, h9 = state.get_pivot_from_end(1)
+            b8, p8, h8 = state.get_pivot_from_end(2)
+            b7, p7, h7 = state.get_pivot_from_end(3)
+            b6, p6, h6 = state.get_pivot_from_end(4)
+            b5, p5, h5 = state.get_pivot_from_end(5)
+            b4, p4, h4 = state.get_pivot_from_end(6)
+            b3, p3, h3 = state.get_pivot_from_end(7)
+            b2, p2, h2 = state.get_pivot_from_end(8)
+            b1, p1, h1 = state.get_pivot_from_end(9)
+        else:
+            # Fallback to 8-pivot pattern (p1 = oldest, p8 = newest)
+            b8, p8, h8 = state.get_pivot_from_end(0)
+            b7, p7, h7 = state.get_pivot_from_end(1)
+            b6, p6, h6 = state.get_pivot_from_end(2)
+            b5, p5, h5 = state.get_pivot_from_end(3)
+            b4, p4, h4 = state.get_pivot_from_end(4)
+            b3, p3, h3 = state.get_pivot_from_end(5)
+            b2, p2, h2 = state.get_pivot_from_end(6)
+            b1, p1, h1 = state.get_pivot_from_end(7)
+            # Initialize p9, p10 as None for 8-pivot mode
+            p9, p10 = None, None
         
         # Check alternating structure for 8 pivots
         up_struct = (not h1) and h2 and (not h3) and h4 and (not h5) and h6 and (not h7) and h8
@@ -334,7 +353,7 @@ class ChochDetector:
         is_highest8 = p8 == max(all_prices)
         is_lowest8 = p8 == min(all_prices)
         
-        # Order constraints for 8-pivot pattern - 3 groups (G1, G2, G3)
+        # Order constraints - Groups G1..G6
         # G1 (Original): 
         g1_up_order = (p2 < p4 < p6 < p8) and (p3 < p5 < p7)
         g1_down_order = (p3 > p5 > p7) and (p2 > p4 > p6 > p8)
@@ -351,9 +370,27 @@ class ChochDetector:
         # Downtrend: p3 > p5 > p7, p2 > p6 > p4 > p8, p2 > p5
         g3_down_order = (p3 > p5 > p7) and (p2 > p6 > p4 > p8) and (p2 > p5)
         
+        # G4 (requires 10 pivots):
+        # Uptrend: p1 < p3 < p5 < p7 < p9, p2 < p8 < p4 < p6 < p10
+        g4_up_order = ten_ready and (p1 < p3 < p5 < p7 < p9) and (p2 < p8 < p4 < p6 < p10)
+        # Downtrend: reverse inequalities
+        g4_down_order = ten_ready and (p1 > p3 > p5 > p7 > p9) and (p2 > p8 > p4 > p6 > p10)
+        
+        # G5 (requires 10 pivots):
+        # Uptrend: p1 < p3 < p5 < p9 < p7, p2 < p8 < p4 < p6 < p10
+        g5_up_order = ten_ready and (p1 < p3 < p5 < p9 < p7) and (p2 < p8 < p4 < p6 < p10)
+        # Downtrend mirror
+        g5_down_order = ten_ready and (p1 > p3 > p5 > p9 > p7) and (p2 > p8 > p4 > p6 > p10)
+        
+        # G6 (uses up to p8):
+        # Uptrend: p1 < p3 < p5 < p7, p2 < p4 < p6 < p8, p5 < p2, p7 < p4
+        g6_up_order = (p1 < p3 < p5 < p7) and (p2 < p4 < p6 < p8) and (p5 < p2) and (p7 < p4)
+        # Downtrend mirror
+        g6_down_order = (p1 > p3 > p5 > p7) and (p2 > p4 > p6 > p8) and (p5 > p2) and (p7 > p4)
+        
         # Combined order check (any group is valid)
-        up_order_ok = g1_up_order or g2_up_order or g3_up_order
-        down_order_ok = g1_down_order or g2_down_order or g3_down_order
+        up_order_ok = g1_up_order or g2_up_order or g3_up_order or g4_up_order or g5_up_order or g6_up_order
+        down_order_ok = g1_down_order or g2_down_order or g3_down_order or g4_down_order or g5_down_order or g6_down_order
         
         # Breakout conditions (simplified - removed p1/p3 comparisons)
         try:
@@ -388,11 +425,39 @@ class ChochDetector:
             
             # Determine which group matched and store it
             if state.last_eight_up:
-                state.pattern_group = "G1" if g1_up_order else ("G2" if g2_up_order else "G3")
+                if g1_up_order:
+                    state.pattern_group = "G1"
+                elif g2_up_order:
+                    state.pattern_group = "G2"
+                elif g3_up_order:
+                    state.pattern_group = "G3"
+                elif g4_up_order:
+                    state.pattern_group = "G4"
+                elif g5_up_order:
+                    state.pattern_group = "G5"
+                elif g6_up_order:
+                    state.pattern_group = "G6"
+                else:
+                    state.pattern_group = None
+                    
                 logger.info(f"[8-PIVOT-{state.pattern_group}] ✓✓✓ VALID UPTREND PATTERN: P1:{p1:.6f}(L) -> P2:{p2:.6f}(H) -> P3:{p3:.6f}(L) -> P4:{p4:.6f}(H) -> P5:{p5:.6f}(L) -> P6:{p6:.6f}(H) -> P7:{p7:.6f}(L-retest P4) -> P8:{p8:.6f}(H)")
                 logger.info(f"   Breakout UP: low[5]({lo5:.6f}) > high[2]({hi2:.6f}) = {lo5 > hi2}")
             else:
-                state.pattern_group = "G1" if g1_down_order else ("G2" if g2_down_order else "G3")
+                if g1_down_order:
+                    state.pattern_group = "G1"
+                elif g2_down_order:
+                    state.pattern_group = "G2"
+                elif g3_down_order:
+                    state.pattern_group = "G3"
+                elif g4_down_order:
+                    state.pattern_group = "G4"
+                elif g5_down_order:
+                    state.pattern_group = "G5"
+                elif g6_down_order:
+                    state.pattern_group = "G6"
+                else:
+                    state.pattern_group = None
+                    
                 logger.info(f"[8-PIVOT-{state.pattern_group}] ✓✓✓ VALID DOWNTREND PATTERN: P1:{p1:.6f}(H) -> P2:{p2:.6f}(L) -> P3:{p3:.6f}(H) -> P4:{p4:.6f}(L) -> P5:{p5:.6f}(H) -> P6:{p6:.6f}(L) -> P7:{p7:.6f}(H-retest P4) -> P8:{p8:.6f}(L)")
                 logger.info(f"   Breakout DOWN: high[5]({hi5:.6f}) < low[2]({lo2:.6f}) = {hi5 < lo2}")
             
@@ -418,10 +483,16 @@ class ChochDetector:
           * G1: Close_CF <= HIGH_5
           * G2: Close_CF <= HIGH_7
           * G3: Close_CF <= HIGH_5
+          * G4': Close_CF > P8 (requires 10 pivots)
+          * G5': Close_CF > P8 (requires 10 pivots)
+          * G6': Order conditions only (no additional price check)
         - Uptrend → CHoCH Down:
           * G1: Close_CF >= LOW_5
           * G2: Close_CF >= LOW_7
           * G3: Close_CF >= LOW_5
+          * G4: Close_CF < P8 (requires 10 pivots)
+          * G5: Close_CF < P8 (requires 10 pivots)
+          * G6: Order conditions only (no additional price check)
         
         Volume Conditions:
         - G1: (678_ok AND 456_ok) OR 45678_ok
@@ -429,6 +500,7 @@ class ChochDetector:
           * 456_ok: (Vol4 OR Vol6) max in {vol4, vol5, vol6}
           * 45678_ok: (Vol8 OR Vol_CHoCH) max in {vol4, vol5, vol6, vol7, vol8}
         - G2/G3: (Vol4 OR Vol5 OR Vol_CHoCH) max in cluster 456
+        - G4/G5/G6: No volume condition (volumeCondition = True)
         
         Returns: (fire_choch_up, fire_choch_down)
         """
@@ -566,6 +638,32 @@ class ChochDetector:
                 
                 if not volume_condition:
                     logger.debug(f"[G3] Volume condition failed - vol4={vol4:.0f} vol5={vol5:.0f} vol_choch={vol_choch:.0f} max={max_456:.0f}")
+            
+            elif state.pattern_group == "G4":
+                # G4': Downtrend → CHoCH Up, close_choch > p8
+                price_condition = current['close'] > p8
+                volume_condition = True  # No specific volume condition for G4
+                confirm_up = price_condition and volume_condition
+                
+                if price_condition:
+                    logger.debug(f"[G4] Price condition OK - close={current['close']:.6f} > p8={p8:.6f}")
+            
+            elif state.pattern_group == "G5":
+                # G5': Downtrend → CHoCH Up, close_choch > p8
+                price_condition = current['close'] > p8
+                volume_condition = True  # No specific volume condition for G5
+                confirm_up = price_condition and volume_condition
+                
+                if price_condition:
+                    logger.debug(f"[G5] Price condition OK - close={current['close']:.6f} > p8={p8:.6f}")
+            
+            elif state.pattern_group == "G6":
+                # G6': Order conditions only (p5 > p2, p7 > p4 already checked)
+                price_condition = True
+                volume_condition = True  # No specific volume condition for G6
+                confirm_up = price_condition and volume_condition
+                
+                logger.debug(f"[G6] Order conditions only - confirm_up=True")
         
         if confirm_down_basic and state.pattern_group:
             # Uptrend → CHoCH Down
@@ -620,6 +718,32 @@ class ChochDetector:
                 
                 if not volume_condition:
                     logger.debug(f"[G3] Volume condition failed - vol4={vol4:.0f} vol5={vol5:.0f} vol_choch={vol_choch:.0f} max={max_456:.0f}")
+            
+            elif state.pattern_group == "G4":
+                # G4: Uptrend → CHoCH Down, close_choch < p8
+                price_condition = current['close'] < p8
+                volume_condition = True  # No specific volume condition for G4
+                confirm_down = price_condition and volume_condition
+                
+                if price_condition:
+                    logger.debug(f"[G4] Price condition OK - close={current['close']:.6f} < p8={p8:.6f}")
+            
+            elif state.pattern_group == "G5":
+                # G5: Uptrend → CHoCH Down, close_choch < p8
+                price_condition = current['close'] < p8
+                volume_condition = True  # No specific volume condition for G5
+                confirm_down = price_condition and volume_condition
+                
+                if price_condition:
+                    logger.debug(f"[G5] Price condition OK - close={current['close']:.6f} < p8={p8:.6f}")
+            
+            elif state.pattern_group == "G6":
+                # G6: Order conditions only (p5 < p2, p7 < p4 already checked)
+                price_condition = True
+                volume_condition = True  # No specific volume condition for G6
+                confirm_down = price_condition and volume_condition
+                
+                logger.debug(f"[G6] Order conditions only - confirm_down=True")
 
         # Fire signal nếu có confirmation và chưa lock
         if not state.choch_locked and (confirm_up or confirm_down):

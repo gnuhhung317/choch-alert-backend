@@ -38,6 +38,7 @@ class TimeframeScheduler:
         '25m': 25,   # Aggregated from 5m - DOESN'T divide 24h!
         '30m': 30,
         '40m': 40,   # Aggregated from 5m
+        '45m': 45,   # Aggregated from 5m
         '50m': 50,   # Aggregated from 5m
         '1h': 60,
         '2h': 120,
@@ -54,6 +55,7 @@ class TimeframeScheduler:
         '20m': datetime(2025, 10, 24, 17, 20, 0),
         '25m': datetime(2025, 10, 24, 17, 5, 0),   # CRITICAL: Only for 25m!
         '40m': datetime(2025, 10, 24, 16, 40, 0),
+        '45m': datetime(2025, 10, 24, 0, 0, 0),
         '50m': datetime(2025, 10, 20, 0, 0, 0),
     }
 

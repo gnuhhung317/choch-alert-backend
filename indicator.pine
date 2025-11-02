@@ -181,6 +181,13 @@ var bool g2_upOrder = false
 var bool g2_downOrder = false
 var bool g3_upOrder = false
 var bool g3_downOrder = false
+// Additional groups G4, G5, G6 (and mirrors) requested
+var bool g4_upOrder = false
+var bool g4_downOrder = false
+var bool g5_upOrder = false
+var bool g5_downOrder = false
+var bool g6_upOrder = false
+var bool g6_downOrder = false
 
 // ========== Khi có pivot mới ==========
 acceptedPH_event := false
@@ -242,6 +249,7 @@ var float pivot6 = na   // p6 (reference cho CHoCH)
 var float pivot5 = na   // p5 (additional reference cho CHoCH)
 var float saved_p5 = na // Store p5 for pattern group confirmation
 var float saved_p7 = na // Store p7 for pattern group confirmation (G2)
+var float saved_p8 = na // Store p8 for pattern group confirmation (G4/G5)
 eightReady = pCount() >= 8
 if eightReady
     [b8,p8,h8] = getPivotFromEnd(0)
@@ -273,25 +281,75 @@ if eightReady
     isLowest8  = p8 == array.min(lowsArr)
 
     // Ràng buộc thứ tự 8-pivot - 3 nhóm (G1, G2, G3)
+    // Ràng buộc thứ tự - nhóm (G1..G6)
+    // Note: some new groups (G4/G5) require 10 pivots. If we have >=10 pivots, compute p1..p10
+    tenReady = pCount() >= 10
+    
+    // Declare pivot variables (non-var, local to this block)
+    int b10 = na, int b9 = na
+    float p10 = na, float p9 = na
+    bool h10 = na, bool h9 = na
+    
+    if tenReady
+        [b10,p10,h10] = getPivotFromEnd(0)
+        [b9,p9,h9]   = getPivotFromEnd(1)
+        [b8,p8,h8]   = getPivotFromEnd(2)
+        [b7,p7,h7]   = getPivotFromEnd(3)
+        [b6,p6,h6]   = getPivotFromEnd(4)
+        [b5,p5,h5]   = getPivotFromEnd(5)
+        [b4,p4,h4]   = getPivotFromEnd(6)
+        [b3,p3,h3]   = getPivotFromEnd(7)
+        [b2,p2,h2]   = getPivotFromEnd(8)
+        [b1,p1,h1]   = getPivotFromEnd(9)
+    else
+        // Fallback to original 8-pivot mapping (p1..p8)
+        [b8,p8,h8] = getPivotFromEnd(0)
+        [b7,p7,h7] = getPivotFromEnd(1)
+        [b6,p6,h6] = getPivotFromEnd(2)
+        [b5,p5,h5] = getPivotFromEnd(3)
+        [b4,p4,h4] = getPivotFromEnd(4)
+        [b3,p3,h3] = getPivotFromEnd(5)
+        [b2,p2,h2] = getPivotFromEnd(6)
+        [b1,p1,h1] = getPivotFromEnd(7)
+        // p9 and p10 remain na (already initialized above)
+
     // G1 (Original):
     g1_upOrder   := (p2 < p4 and p4 < p6 and p6 < p8) and (p3 < p5 and p5 < p7)
     g1_downOrder := (p3 > p5 and p5 > p7) and (p2 > p4 and p4 > p6 and p6 > p8)
-    
+
     // G2:
     // Uptrend: p3 < p7 < p5, p2 < p6 < p4 < p8, p2 < p5
     g2_upOrder   := (p3 < p7 and p7 < p5) and (p2 < p6 and p6 < p4 and p4 < p8) and (p2 < p5)
     // Downtrend: p3 > p7 > p5, p2 > p6 > p4 > p8, p2 > p5
     g2_downOrder := (p3 > p7 and p7 > p5) and (p2 > p6 and p6 > p4 and p4 > p8) and (p2 > p5)
-    
+
     // G3:
     // Uptrend: p3 < p5 < p7, p2 < p6 < p4 < p8, p2 < p5
     g3_upOrder   := (p3 < p5 and p5 < p7) and (p2 < p6 and p6 < p4 and p4 < p8) and (p2 < p5)
     // Downtrend: p3 > p5 > p7, p2 > p6 > p4 > p8, p2 > p5
     g3_downOrder := (p3 > p5 and p5 > p7) and (p2 > p6 and p6 > p4 and p4 > p8) and (p2 > p5)
-    
-    // Combined order check (bất kỳ nhóm nào hợp lệ)
-    upOrderOK   = g1_upOrder or g2_upOrder or g3_upOrder
-    downOrderOK = g1_downOrder or g2_downOrder or g3_downOrder
+
+    // G4 (requires 10 pivots):
+    // Uptrend variant: p1 < p3 < p5 < p7 < p9, p2 < p8 < p4 < p6 < p10
+    g4_upOrder := tenReady and (p1 < p3 and p3 < p5 and p5 < p7 and p7 < p9) and (p2 < p8 and p8 < p4 and p4 < p6 and p6 < p10)
+    // Downtrend mirror: reverse inequalities
+    g4_downOrder := tenReady and (p1 > p3 and p3 > p5 and p5 > p7 and p7 > p9) and (p2 > p8 and p8 > p4 and p4 > p6 and p6 > p10)
+
+    // G5 (requires 10 pivots):
+    // Uptrend: p1 < p3 < p5 < p9 < p7, p2 < p8 < p4 < p6 < p10
+    g5_upOrder := tenReady and (p1 < p3 and p3 < p5 and p5 < p9 and p9 < p7) and (p2 < p8 and p8 < p4 and p4 < p6 and p6 < p10)
+    // Downtrend mirror
+    g5_downOrder := tenReady and (p1 > p3 and p3 > p5 and p5 > p9 and p9 > p7) and (p2 > p8 and p8 > p4 and p4 > p6 and p6 > p10)
+
+    // G6 (uses up to p8):
+    // Uptrend: p1 < p3 < p5 < p7, p2 < p4 < p6 < p8, p5 < p2, p7 < p4
+    g6_upOrder := (p1 < p3 and p3 < p5 and p5 < p7) and (p2 < p4 and p4 < p6 and p6 < p8) and (p5 < p2) and (p7 < p4)
+    // Downtrend mirror
+    g6_downOrder := (p1 > p3 and p3 > p5 and p5 > p7) and (p2 > p4 and p4 > p6 and p6 > p8) and (p5 > p2) and (p7 > p4)
+
+    // Combined order check (any valid group)
+    upOrderOK   = g1_upOrder or g2_upOrder or g3_upOrder or g4_upOrder or g5_upOrder or g6_upOrder
+    downOrderOK = g1_downOrder or g2_downOrder or g3_downOrder or g4_downOrder or g5_downOrder or g6_downOrder
 
     // Điều kiện breakout mới
     off5 = math.max(0, bar_index - b5)
@@ -324,6 +382,7 @@ if eightReady
         // Store pivot values for confirmation logic
         saved_p5 := p5
         saved_p7 := p7
+        saved_p8 := p8
 
     lastEightBarIdx := b8
     p2_price        := p2
@@ -362,9 +421,35 @@ if eightReady and not na(pivot6) and not na(pivot5)
     // ========== PATTERN GROUP SPECIFIC CONDITIONS for Confirmation Candle ==========
     // Determine which group matched
     if lastEightUp
-        matchedGroup := g1_upOrder ? "G1" : (g2_upOrder ? "G2" : "G3")
+        if g1_upOrder
+            matchedGroup := "G1"
+        else if g2_upOrder
+            matchedGroup := "G2"
+        else if g3_upOrder
+            matchedGroup := "G3"
+        else if g4_upOrder
+            matchedGroup := "G4"
+        else if g5_upOrder
+            matchedGroup := "G5"
+        else if g6_upOrder
+            matchedGroup := "G6"
+        else
+            matchedGroup := na
     else if lastEightDown
-        matchedGroup := g1_downOrder ? "G1" : (g2_downOrder ? "G2" : "G3")
+        if g1_downOrder
+            matchedGroup := "G1"
+        else if g2_downOrder
+            matchedGroup := "G2"
+        else if g3_downOrder
+            matchedGroup := "G3"
+        else if g4_downOrder
+            matchedGroup := "G4"
+        else if g5_downOrder
+            matchedGroup := "G5"
+        else if g6_downOrder
+            matchedGroup := "G6"
+        else
+            matchedGroup := na
 
     // Get volumes at pivot bars
     vol8 = getVolumeFromEnd(0)
@@ -421,6 +506,25 @@ if eightReady and not na(pivot6) and not na(pivot5)
             max_456 = math.max(vol4, math.max(vol5, vol6))
             volumeCondition := (vol4 == max_456) or (vol5 == max_456) or (vol_choch == max_456)
             confirmUp := priceCondition and volumeCondition
+
+        // Additional groups for Up confirmation (Downtrend -> CHoCH Up): G4', G5', G6'
+        else if matchedGroup == "G4"
+            // G4': priceCondition close_choch > p8
+            priceCondition := close > saved_p8
+            volumeCondition := true
+            confirmUp := priceCondition and volumeCondition
+
+        else if matchedGroup == "G5"
+            // G5': priceCondition close_choch > p8
+            priceCondition := close > saved_p8
+            volumeCondition := true
+            confirmUp := priceCondition and volumeCondition
+
+        else if matchedGroup == "G6"
+            // G6': order conditions already checked; no extra price rule specified
+            priceCondition := true
+            volumeCondition := true
+            confirmUp := priceCondition and volumeCondition
     
     if baseDown and not na(matchedGroup)
         // Uptrend → CHoCH Down
@@ -464,6 +568,25 @@ if eightReady and not na(pivot6) and not na(pivot5)
             // (Vol4 OR Vol5 OR Vol_CHoCH) là lớn nhất cụm 456
             max_456 = math.max(vol4, math.max(vol5, vol6))
             volumeCondition := (vol4 == max_456) or (vol5 == max_456) or (vol_choch == max_456)
+            confirmDown := priceCondition and volumeCondition
+
+        // New groups for Down confirmation (Uptrend -> CHoCH Down)
+        else if matchedGroup == "G4"
+            // G4: requires 10 pivots (order already checked). Price condition: close_choch < p8
+            priceCondition := close < saved_p8
+            volumeCondition := true
+            confirmDown := priceCondition and volumeCondition
+
+        else if matchedGroup == "G5"
+            // G5: requires 10 pivots. Price condition: close_choch < p8
+            priceCondition := close < saved_p8
+            volumeCondition := true
+            confirmDown := priceCondition and volumeCondition
+
+        else if matchedGroup == "G6"
+            // G6: order conditions include p5 < p2 and p7 < p4; no extra price rule specified
+            priceCondition := true
+            volumeCondition := true
             confirmDown := priceCondition and volumeCondition
 
     // Fire signal với locking
