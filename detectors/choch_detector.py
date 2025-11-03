@@ -339,7 +339,7 @@ class ChochDetector:
         down_struct = h1 and (not h2) and h3 and (not h4) and h5 and (not h6) and h7 and (not h8)
         
         if not (up_struct or down_struct):
-            return False
+            return False, False, None, None, None, None, None
         
         # Check P7 retest P4 (for 8-pivot pattern)
         try:
@@ -351,9 +351,9 @@ class ChochDetector:
             touch_retest = (up_struct and (lo7 < hi4)) or (down_struct and (hi7 > lo4))
             
             if not touch_retest:
-                return False
+                return False, False, None, None, None, None, None
         except KeyError:
-            return False
+            return False, False, None, None, None, None, None
         
         # Check P8 is extreme
         all_prices = [p1, p2, p3, p4, p5, p6, p7, p8]
@@ -586,9 +586,23 @@ class ChochDetector:
                 effective_last_eight_up = pattern_result[0]
                 effective_last_eight_down = pattern_result[1]
                 effective_eight_bar_idx = pattern_result[5]  # b8 from offset pivots
+                # Also need to recalculate CHoCH conditions with new p2
+                effective_p2 = pattern_result[6]
+                
+                # Recalculate CHoCH bar conditions with effective p2
+                choch_up_bar = (prev['low'] > pre_prev['low'] and 
+                               prev['close'] > pre_prev['high'] and 
+                               prev['close'] > state.pivot6 and
+                               prev['close'] < effective_p2)
+                
+                choch_down_bar = (prev['high'] < pre_prev['high'] and 
+                                 prev['close'] < pre_prev['low'] and 
+                                 prev['close'] < state.pivot6 and
+                                 prev['close'] > effective_p2)
                 
                 logger.debug(f"[CHoCH] Effective pattern: up={effective_last_eight_up}, down={effective_last_eight_down}")
                 logger.debug(f"[CHoCH] Effective eight_bar_idx: {effective_eight_bar_idx} (was {state.last_eight_bar_idx})")
+                logger.debug(f"[CHoCH] Effective p2: {effective_p2:.6f} (was {p2:.6f})")
             else:
                 logger.debug(f"[CHoCH] No valid pattern found with offset=1, using current state")
         
@@ -859,6 +873,7 @@ class ChochDetector:
         
         # Check for 8-pattern
         pattern_result = self.check_eight_pattern(state, df)
+        logger.debug(f"[rebuild_pivots] pattern_result type: {type(pattern_result)}, value: {pattern_result}")
         if pattern_result[0] or pattern_result[1]:  # If any pattern matched
             # Update state with results
             state.last_eight_up = pattern_result[0]

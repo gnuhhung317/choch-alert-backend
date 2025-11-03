@@ -514,7 +514,7 @@ class ChochAlertSystem:
                         await asyncio.sleep(0.1)
                     
                     except Exception as e:
-                        logger.error(f"Error processing {symbol} {timeframe}: {e}")
+                        logger.error(f"Error processing {symbol} {timeframe}: {e}", exc_info=True)
                         await asyncio.sleep(1)
                 
                 # After processing all scannable timeframes for this symbol, sleep a tiny bit
