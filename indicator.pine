@@ -23,6 +23,10 @@ showVariantLabel = input.bool(false, "Hiển thị mã biến thể trên chart"
 
 var bool chochLocked = false 
 
+// Store CHoCH bar for persistent label
+var int chochUpBar = na
+var int chochDownBar = na 
+
 // ========== Storage ==========
 var prices = array.new_float()
 var bars   = array.new_int()
@@ -414,9 +418,33 @@ if eightReady and not na(pivot6) and not na(pivot5)
     // CHoCH Down confirmed: current high < low của nến pre-CHoCH [2]
     confirmDownBasic = (high < low[2])
 
-    // Match with pattern direction
-    baseUp   = isAfterEight and lastEightDown and chochUpBar and confirmUpBasic
-    baseDown = isAfterEight and lastEightUp   and chochDownBar and confirmDownBasic
+    // Check nếu nến CHoCH (bar[1]) là pivot mới nhất → lấy pivot trước đó
+    // để tránh fail điều kiện isAfterEight
+    chochBarIsPivot = (bar_index - 1 == lastEightBarIdx)
+    nineReady = pCount() >= 9
+    var int effectiveEightBarIdx = na
+    var bool effectiveLastEightUp = false
+    var bool effectiveLastEightDown = false
+    
+    if chochBarIsPivot and nineReady
+        // Nến CHoCH là pivot → lấy pivot trước đó (offset 1)
+        [b9,_,_] = getPivotFromEnd(1)
+        effectiveEightBarIdx := b9
+        // Lấy giá trị lastEightUp/Down từ nến trước đó (bar[1])
+        effectiveLastEightUp := lastEightUp[1]
+        effectiveLastEightDown := lastEightDown[1]
+    else
+        // Nến CHoCH không là pivot → dùng lastEightBarIdx bình thường
+        effectiveEightBarIdx := lastEightBarIdx
+        effectiveLastEightUp := lastEightUp
+        effectiveLastEightDown := lastEightDown
+    
+    // Recalculate isAfterEight với effectiveEightBarIdx
+    isAfterEightSafe = eightReady and (bar_index > nz(effectiveEightBarIdx))
+
+    // Match with pattern direction - sử dụng isAfterEightSafe và effective values
+    baseUp   = isAfterEightSafe and effectiveLastEightDown and chochUpBar and confirmUpBasic
+    baseDown = isAfterEightSafe and effectiveLastEightUp   and chochDownBar and confirmDownBasic
 
     // ========== PATTERN GROUP SPECIFIC CONDITIONS for Confirmation Candle ==========
     // Determine which group matched
@@ -494,7 +522,7 @@ if eightReady and not na(pivot6) and not na(pivot5)
             // Volume condition G2/G3:
             // (Vol4 OR Vol5 OR Vol_CHoCH) là lớn nhất cụm 456
             max_456 = math.max(vol4, math.max(vol5, vol6))
-            volumeCondition := (vol4 == max_456) or (vol5 == max_456) or (vol_choch == max_456)
+            volumeCondition := (vol4 == max_456) or (vol5 == max_456) or (vol_choch >= max_456)
             confirmUp := priceCondition and volumeCondition
             
         else if matchedGroup == "G3"
@@ -504,7 +532,7 @@ if eightReady and not na(pivot6) and not na(pivot5)
             // Volume condition G2/G3:
             // (Vol4 OR Vol5 OR Vol_CHoCH) là lớn nhất cụm 456
             max_456 = math.max(vol4, math.max(vol5, vol6))
-            volumeCondition := (vol4 == max_456) or (vol5 == max_456) or (vol_choch == max_456)
+            volumeCondition := (vol4 == max_456) or (vol5 == max_456) or (vol_choch >= max_456)
             confirmUp := priceCondition and volumeCondition
 
         // Additional groups for Up confirmation (Downtrend -> CHoCH Up): G4', G5', G6'
@@ -557,7 +585,7 @@ if eightReady and not na(pivot6) and not na(pivot5)
             // Volume condition G2/G3:
             // (Vol4 OR Vol5 OR Vol_CHoCH) là lớn nhất cụm 456
             max_456 = math.max(vol4, math.max(vol5, vol6))
-            volumeCondition := (vol4 == max_456) or (vol5 == max_456) or (vol_choch == max_456)
+            volumeCondition := (vol4 == max_456) or (vol5 == max_456) or (vol_choch >= max_456)
             confirmDown := priceCondition and volumeCondition
             
         else if matchedGroup == "G3"
@@ -567,7 +595,7 @@ if eightReady and not na(pivot6) and not na(pivot5)
             // Volume condition G2/G3:
             // (Vol4 OR Vol5 OR Vol_CHoCH) là lớn nhất cụm 456
             max_456 = math.max(vol4, math.max(vol5, vol6))
-            volumeCondition := (vol4 == max_456) or (vol5 == max_456) or (vol_choch == max_456)
+            volumeCondition := (vol4 == max_456) or (vol5 == max_456) or (vol_choch >= max_456)
             confirmDown := priceCondition and volumeCondition
 
         // New groups for Down confirmation (Uptrend -> CHoCH Down)
@@ -595,9 +623,19 @@ if eightReady and not na(pivot6) and not na(pivot5)
 
     if fireChochUp or fireChochDn
         chochLocked := true
+        // Store bar index for persistent label
+        if fireChochUp
+            chochUpBar := bar_index
+        if fireChochDn
+            chochDownBar := bar_index
 
 // ========== Plot ==========
 plotshape(fireChochUp,  title="CHoCH Up",   style=shape.labelup,   text="CH↑",
           color=color.new(color.teal, 0),   textcolor=color.white, location=location.belowbar, size=size.tiny)
 plotshape(fireChochDn,  title="CHoCH Down", style=shape.labeldown, text="CH↓",
           color=color.new(color.orange, 0), textcolor=color.white, location=location.abovebar, size=size.tiny)
+
+// ========== Alert Conditions ==========
+alertcondition(fireChochUp, title="CHoCH Up Alert", message="CHoCH Up detected on {{ticker}} {{interval}}")
+alertcondition(fireChochDn, title="CHoCH Down Alert", message="CHoCH Down detected on {{ticker}} {{interval}}")
+alertcondition(fireChochUp or fireChochDn, title="CHoCH Alert (Any)", message="CHoCH detected on {{ticker}} {{interval}}")

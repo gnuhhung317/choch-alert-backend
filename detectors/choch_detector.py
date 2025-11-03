@@ -290,40 +290,47 @@ class ChochDetector:
         
         return False
     
-    def check_eight_pattern(self, state: TimeframeState, df: pd.DataFrame) -> bool:
+    def check_eight_pattern(self, state: TimeframeState, df: pd.DataFrame, pivot_offset: int = 0) -> Tuple[bool, bool, Optional[str], Optional[float], Optional[float], Optional[int], Optional[float]]:
         """
         Check for valid 8-pivot pattern (or 10-pivot for G4/G5)
-        Returns True if pattern is valid and updates state
+        
+        Args:
+            pivot_offset: Offset to shift pivot reading (0 = use latest pivots, 1 = skip latest pivot)
+                         Used when CHoCH bar is the newest pivot to check pattern from previous 8 pivots
+        
+        Returns:
+            Tuple of (last_eight_up, last_eight_down, pattern_group, pivot5, pivot6, last_eight_bar_idx, p2)
         """
-        if state.pivot_count() < 8:
-            return False
+        required_pivots = 8 + pivot_offset
+        if state.pivot_count() < required_pivots:
+            return False, False, None, None, None, None, None
         
         # Check if we have 10 pivots for G4/G5 groups
-        ten_ready = state.pivot_count() >= 10
+        ten_ready = state.pivot_count() >= (10 + pivot_offset)
         
-        # Get pivots based on availability
+        # Get pivots based on availability with offset
         if ten_ready:
             # Map to 10-pivot pattern (p1 = oldest, p10 = newest)
-            b10, p10, h10 = state.get_pivot_from_end(0)
-            b9, p9, h9 = state.get_pivot_from_end(1)
-            b8, p8, h8 = state.get_pivot_from_end(2)
-            b7, p7, h7 = state.get_pivot_from_end(3)
-            b6, p6, h6 = state.get_pivot_from_end(4)
-            b5, p5, h5 = state.get_pivot_from_end(5)
-            b4, p4, h4 = state.get_pivot_from_end(6)
-            b3, p3, h3 = state.get_pivot_from_end(7)
-            b2, p2, h2 = state.get_pivot_from_end(8)
-            b1, p1, h1 = state.get_pivot_from_end(9)
+            b10, p10, h10 = state.get_pivot_from_end(0 + pivot_offset)
+            b9, p9, h9 = state.get_pivot_from_end(1 + pivot_offset)
+            b8, p8, h8 = state.get_pivot_from_end(2 + pivot_offset)
+            b7, p7, h7 = state.get_pivot_from_end(3 + pivot_offset)
+            b6, p6, h6 = state.get_pivot_from_end(4 + pivot_offset)
+            b5, p5, h5 = state.get_pivot_from_end(5 + pivot_offset)
+            b4, p4, h4 = state.get_pivot_from_end(6 + pivot_offset)
+            b3, p3, h3 = state.get_pivot_from_end(7 + pivot_offset)
+            b2, p2, h2 = state.get_pivot_from_end(8 + pivot_offset)
+            b1, p1, h1 = state.get_pivot_from_end(9 + pivot_offset)
         else:
             # Fallback to 8-pivot pattern (p1 = oldest, p8 = newest)
-            b8, p8, h8 = state.get_pivot_from_end(0)
-            b7, p7, h7 = state.get_pivot_from_end(1)
-            b6, p6, h6 = state.get_pivot_from_end(2)
-            b5, p5, h5 = state.get_pivot_from_end(3)
-            b4, p4, h4 = state.get_pivot_from_end(4)
-            b3, p3, h3 = state.get_pivot_from_end(5)
-            b2, p2, h2 = state.get_pivot_from_end(6)
-            b1, p1, h1 = state.get_pivot_from_end(7)
+            b8, p8, h8 = state.get_pivot_from_end(0 + pivot_offset)
+            b7, p7, h7 = state.get_pivot_from_end(1 + pivot_offset)
+            b6, p6, h6 = state.get_pivot_from_end(2 + pivot_offset)
+            b5, p5, h5 = state.get_pivot_from_end(3 + pivot_offset)
+            b4, p4, h4 = state.get_pivot_from_end(4 + pivot_offset)
+            b3, p3, h3 = state.get_pivot_from_end(5 + pivot_offset)
+            b2, p2, h2 = state.get_pivot_from_end(6 + pivot_offset)
+            b1, p1, h1 = state.get_pivot_from_end(7 + pivot_offset)
             # Initialize p9, p10 as None for 8-pivot mode
             p9, p10 = None, None
         
@@ -410,60 +417,49 @@ class ChochDetector:
             down_breakout = False
         
         # Validate pattern - uptrend cần up_breakout, downtrend cần down_breakout
-        old_eight_up = state.last_eight_up
-        old_eight_down = state.last_eight_down
+        last_eight_up_result = up_struct and up_order_ok and touch_retest and is_highest8 and up_breakout
+        last_eight_down_result = down_struct and down_order_ok and touch_retest and is_lowest8 and down_breakout
         
-        # Uptrend pattern với up breakout conditions
-        state.last_eight_up = up_struct and up_order_ok and touch_retest and is_highest8 and up_breakout
-        # Downtrend pattern với down breakout conditions  
-        state.last_eight_down = down_struct and down_order_ok and touch_retest and is_lowest8 and down_breakout
+        pattern_group_result = None
         
-        if state.last_eight_up or state.last_eight_down:
-            state.pivot5 = p5  # Reference pivot 5 for additional CHoCH condition
-            state.pivot6 = p6  # Reference pivot for CHoCH (was p4 in 6-pivot pattern)
-            state.last_eight_bar_idx = b8
-            
-            # Determine which group matched and store it
-            if state.last_eight_up:
+        if last_eight_up_result or last_eight_down_result:
+            # Determine which group matched
+            if last_eight_up_result:
                 if g1_up_order:
-                    state.pattern_group = "G1"
+                    pattern_group_result = "G1"
                 elif g2_up_order:
-                    state.pattern_group = "G2"
+                    pattern_group_result = "G2"
                 elif g3_up_order:
-                    state.pattern_group = "G3"
+                    pattern_group_result = "G3"
                 elif g4_up_order:
-                    state.pattern_group = "G4"
+                    pattern_group_result = "G4"
                 elif g5_up_order:
-                    state.pattern_group = "G5"
+                    pattern_group_result = "G5"
                 elif g6_up_order:
-                    state.pattern_group = "G6"
-                else:
-                    state.pattern_group = None
+                    pattern_group_result = "G6"
                     
-                logger.info(f"[8-PIVOT-{state.pattern_group}] ✓✓✓ VALID UPTREND PATTERN: P1:{p1:.6f}(L) -> P2:{p2:.6f}(H) -> P3:{p3:.6f}(L) -> P4:{p4:.6f}(H) -> P5:{p5:.6f}(L) -> P6:{p6:.6f}(H) -> P7:{p7:.6f}(L-retest P4) -> P8:{p8:.6f}(H)")
+                logger.info(f"[8-PIVOT-{pattern_group_result}] ✓✓✓ VALID UPTREND PATTERN (offset={pivot_offset}): P1:{p1:.6f}(L) -> P2:{p2:.6f}(H) -> P3:{p3:.6f}(L) -> P4:{p4:.6f}(H) -> P5:{p5:.6f}(L) -> P6:{p6:.6f}(H) -> P7:{p7:.6f}(L-retest P4) -> P8:{p8:.6f}(H)")
                 logger.info(f"   Breakout UP: low[5]({lo5:.6f}) > high[2]({hi2:.6f}) = {lo5 > hi2}")
             else:
                 if g1_down_order:
-                    state.pattern_group = "G1"
+                    pattern_group_result = "G1"
                 elif g2_down_order:
-                    state.pattern_group = "G2"
+                    pattern_group_result = "G2"
                 elif g3_down_order:
-                    state.pattern_group = "G3"
+                    pattern_group_result = "G3"
                 elif g4_down_order:
-                    state.pattern_group = "G4"
+                    pattern_group_result = "G4"
                 elif g5_down_order:
-                    state.pattern_group = "G5"
+                    pattern_group_result = "G5"
                 elif g6_down_order:
-                    state.pattern_group = "G6"
-                else:
-                    state.pattern_group = None
+                    pattern_group_result = "G6"
                     
-                logger.info(f"[8-PIVOT-{state.pattern_group}] ✓✓✓ VALID DOWNTREND PATTERN: P1:{p1:.6f}(H) -> P2:{p2:.6f}(L) -> P3:{p3:.6f}(H) -> P4:{p4:.6f}(L) -> P5:{p5:.6f}(H) -> P6:{p6:.6f}(L) -> P7:{p7:.6f}(H-retest P4) -> P8:{p8:.6f}(L)")
+                logger.info(f"[8-PIVOT-{pattern_group_result}] ✓✓✓ VALID DOWNTREND PATTERN (offset={pivot_offset}): P1:{p1:.6f}(H) -> P2:{p2:.6f}(L) -> P3:{p3:.6f}(H) -> P4:{p4:.6f}(L) -> P5:{p5:.6f}(H) -> P6:{p6:.6f}(L) -> P7:{p7:.6f}(H-retest P4) -> P8:{p8:.6f}(L)")
                 logger.info(f"   Breakout DOWN: high[5]({hi5:.6f}) < low[2]({lo2:.6f}) = {hi5 < lo2}")
             
-            return True
+            return last_eight_up_result, last_eight_down_result, pattern_group_result, p5, p6, b8, p2
         
-        return False
+        return False, False, None, None, None, None, None
         
     def check_choch(self, df: pd.DataFrame, state: TimeframeState, 
                     current_idx: int) -> Tuple[bool, bool]:
@@ -570,9 +566,41 @@ class ChochDetector:
                          prev['close'] < state.pivot6 and
                          prev['close'] > p2)
 
-        # Match with pattern direction
-        base_up = is_after_eight and state.last_eight_down and choch_up_bar
-        base_down = is_after_eight and state.last_eight_up and choch_down_bar
+        # ========== CHECK IF CHOCH BAR IS NEWEST PIVOT ==========
+        # Nếu nến CHoCH (prev_idx) là pivot mới nhất, cần lấy pattern từ 8 pivot trước đó
+        choch_bar_is_pivot = (prev_idx == state.last_eight_bar_idx)
+        nine_ready = state.pivot_count() >= 9
+        
+        effective_last_eight_up = state.last_eight_up
+        effective_last_eight_down = state.last_eight_down
+        effective_eight_bar_idx = state.last_eight_bar_idx
+        
+        if choch_bar_is_pivot and nine_ready:
+            logger.debug(f"[CHoCH] CHoCH bar {prev_idx} IS newest pivot (p8={state.last_eight_bar_idx})")
+            logger.debug(f"[CHoCH] Recalculating pattern from previous 8 pivots (offset=1)")
+            
+            # Tính lại pattern từ 8 pivot trước đó (bỏ qua pivot mới nhất)
+            pattern_result = self.check_eight_pattern(state, df, pivot_offset=1)
+            
+            if pattern_result[0] or pattern_result[1]:
+                effective_last_eight_up = pattern_result[0]
+                effective_last_eight_down = pattern_result[1]
+                effective_eight_bar_idx = pattern_result[5]  # b8 from offset pivots
+                
+                logger.debug(f"[CHoCH] Effective pattern: up={effective_last_eight_up}, down={effective_last_eight_down}")
+                logger.debug(f"[CHoCH] Effective eight_bar_idx: {effective_eight_bar_idx} (was {state.last_eight_bar_idx})")
+            else:
+                logger.debug(f"[CHoCH] No valid pattern found with offset=1, using current state")
+        
+        # Must be after eight pattern (use effective bar idx)
+        is_after_eight = current_idx > effective_eight_bar_idx
+
+        if not is_after_eight:
+            return False, False
+
+        # Match with pattern direction (use effective values)
+        base_up = is_after_eight and effective_last_eight_down and choch_up_bar
+        base_down = is_after_eight and effective_last_eight_up and choch_down_bar
 
         # Confirmation conditions (TẤT CẢ ĐỀU ĐÃ ĐÓNG):
         # CHoCH Up: current bar low > high của nến trước CHoCH (pre_prev)
@@ -620,7 +648,7 @@ class ChochDetector:
                 # Volume condition G2/G3:
                 # (Vol4 OR Vol5 OR Vol_CHoCH) là lớn nhất cụm 456
                 max_456 = max(vol4, vol5, vol6)
-                volume_condition = (vol4 == max_456) or (vol5 == max_456) or (vol_choch == max_456)
+                volume_condition = (vol4 == max_456) or (vol5 == max_456) or (vol_choch >= max_456)
                 confirm_up = price_condition and volume_condition
                 
                 if not volume_condition:
@@ -633,7 +661,7 @@ class ChochDetector:
                 # Volume condition G2/G3:
                 # (Vol4 OR Vol5 OR Vol_CHoCH) là lớn nhất cụm 456
                 max_456 = max(vol4, vol5, vol6)
-                volume_condition = (vol4 == max_456) or (vol5 == max_456) or (vol_choch == max_456)
+                volume_condition = (vol4 == max_456) or (vol5 == max_456) or (vol_choch >= max_456)
                 confirm_up = price_condition and volume_condition
                 
                 if not volume_condition:
@@ -700,7 +728,7 @@ class ChochDetector:
                 # Volume condition G2/G3:
                 # (Vol4 OR Vol5 OR Vol_CHoCH) là lớn nhất cụm 456
                 max_456 = max(vol4, vol5, vol6)
-                volume_condition = (vol4 == max_456) or (vol5 == max_456) or (vol_choch == max_456)
+                volume_condition = (vol4 == max_456) or (vol5 == max_456) or (vol_choch >= max_456)
                 confirm_down = price_condition and volume_condition
                 
                 if not volume_condition:
@@ -713,7 +741,7 @@ class ChochDetector:
                 # Volume condition G2/G3:
                 # (Vol4 OR Vol5 OR Vol_CHoCH) là lớn nhất cụm 456
                 max_456 = max(vol4, vol5, vol6)
-                volume_condition = (vol4 == max_456) or (vol5 == max_456) or (vol_choch == max_456)
+                volume_condition = (vol4 == max_456) or (vol5 == max_456) or (vol_choch >= max_456)
                 confirm_down = price_condition and volume_condition
                 
                 if not volume_condition:
@@ -830,7 +858,16 @@ class ChochDetector:
             state.last_pivot_price = pivot_price
         
         # Check for 8-pattern
-        self.check_eight_pattern(state, df)
+        pattern_result = self.check_eight_pattern(state, df)
+        if pattern_result[0] or pattern_result[1]:  # If any pattern matched
+            # Update state with results
+            state.last_eight_up = pattern_result[0]
+            state.last_eight_down = pattern_result[1]
+            state.pattern_group = pattern_result[2]
+            state.pivot5 = pattern_result[3]
+            state.pivot6 = pattern_result[4]
+            state.last_eight_bar_idx = pattern_result[5]
+            # p2_price stored as pattern_result[6] but not saved to state (used in check_choch)
         
         pivot_after = state.pivot_count()
         logger.info(f"[rebuild_pivots] Final: {pivot_after} total pivots (with fakes)")
