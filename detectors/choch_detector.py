@@ -617,11 +617,11 @@ class ChochDetector:
         base_down = is_after_eight and effective_last_eight_up and choch_down_bar
 
         # Confirmation conditions (TẤT CẢ ĐỀU ĐÃ ĐÓNG):
-        # CHoCH Up: current bar low > high của nến trước CHoCH (pre_prev)
-        confirm_up_basic = base_up and (current['low'] > pre_prev['high'])
+        # CHoCH Up: close của confirmation > high của nến pre-CHoCH
+        confirm_up_basic = base_up and (current['close'] > pre_prev['high'])
         
-        # CHoCH Down: current bar high < low của nến trước CHoCH (pre_prev)  
-        confirm_down_basic = base_down and (current['high'] < pre_prev['low'])
+        # CHoCH Down: close của confirmation < low của nến pre-CHoCH
+        confirm_down_basic = base_down and (current['close'] < pre_prev['low'])
 
         # Pattern Group Specific Conditions for confirmation candle
         confirm_up = False

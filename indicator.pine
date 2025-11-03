@@ -412,11 +412,11 @@ if eightReady and not na(pivot6) and not na(pivot5)
                    (close[1] < pivot6) and (close[1] > p2_price)
 
     // Confirmation conditions - Basic (nến [0] - current bar)
-    // CHoCH Up confirmed: current low > high của nến pre-CHoCH [2]
-    confirmUpBasic = (low > high[2])
+    // CHoCH Up confirmed: close của confirmation > high của nến pre-CHoCH [2]
+    confirmUpBasic = (close > high[2])
     
-    // CHoCH Down confirmed: current high < low của nến pre-CHoCH [2]
-    confirmDownBasic = (high < low[2])
+    // CHoCH Down confirmed: close của confirmation < low của nến pre-CHoCH [2]
+    confirmDownBasic = (close < low[2])
 
     // Check nếu nến CHoCH (bar[1]) là pivot mới nhất → lấy pivot trước đó
     // để tránh fail điều kiện isAfterEight
