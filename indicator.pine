@@ -16,9 +16,11 @@ showTable   = input.bool(true, "Bảng thông tin")
 allowPH1 = input.bool(true,  "Cho phép PH loại 1")
 allowPH2 = input.bool(true,  "Cho phép PH loại 2 (con là nến #1)")
 allowPH3 = input.bool(true,  "Cho phép PH loại 3 (biến thể khác)")
+allowPH4 = input.bool(true,  "Cho phép PH loại 4")
 allowPL1 = input.bool(true,  "Cho phép PL loại 1")
 allowPL2 = input.bool(true,  "Cho phép PL loại 2 (con là nến #1)")
 allowPL3 = input.bool(true,  "Cho phép PL loại 3 (biến thể khác)")
+allowPL4 = input.bool(true,  "Cho phép PL loại 4")
 showVariantLabel = input.bool(false, "Hiển thị mã biến thể trên chart")
 
 var bool chochLocked = false 
@@ -92,6 +94,10 @@ isPH_type3() =>
     [h1,h2,h3,l1,l2,l3] = getHLTripletAroundMid()
     not na(h1) and not na(h3) and (h2 > h1 and h2 >= h3) and (l2 < l3 and l2 > l1)
 
+isPH_type4() =>
+    [h1,h2,h3,l1,l2,l3] = getHLTripletAroundMid()
+    not na(h1) and not na(h3) and (h2 >= h3 and h2 > h1) and (l2 <= l3 and l2 > l1)
+
 isPL_type1() =>
     [h1,h2,h3,l1,l2,l3] = getHLTripletAroundMid()
     not na(h1) and not na(h3) and (l2 < l1 and l2 < l3) and (h2 < h1 and h2 < h3)
@@ -102,18 +108,24 @@ isPL_type2() =>
 
 isPL_type3() =>
     [h1,h2,h3,l1,l2,l3] = getHLTripletAroundMid()
-    not na(h1) and not na(h3) and (l2 < l1 and l2 < l3) and (h2 < h1 and h2 > h3)
+    not na(h1) and not na(h3) and (l2 < l1 and l2 < l3) and (h2 < h1 and h2 >= h3)
+
+isPL_type4() =>
+    [h1,h2,h3,l1,l2,l3] = getHLTripletAroundMid()
+    not na(h1) and not na(h3) and (h2 <= h3 and h2 < h1) and (l2 >= l3 and l2 <= l1)
 
 classifyPivotVariant(isHighPivot) =>
     var string t = "NA"
     if isHighPivot
         t := isPH_type1() ? "PH1" :
              isPH_type2() ? "PH2" :
-             isPH_type3() ? "PH3" : "NA"
+             isPH_type3() ? "PH3" :
+             isPH_type4() ? "PH4" : "NA"
     else
         t := isPL_type1() ? "PL1" :
              isPL_type2() ? "PL2" :
-             isPL_type3() ? "PL3" : "NA"
+             isPL_type3() ? "PL3" :
+             isPL_type4() ? "PL4" : "NA"
     t
 
 allowedByUser(t) =>
@@ -121,9 +133,11 @@ allowedByUser(t) =>
         "PH1" => allowPH1
         "PH2" => allowPH2
         "PH3" => allowPH3
+        "PH4" => allowPH4
         "PL1" => allowPL1
         "PL2" => allowPL2
         "PL3" => allowPL3
+        "PL4" => allowPL4
         => false
 
 // ========== Custom Pivot Detection (không dùng ta.pivot*) ==========
@@ -149,6 +163,8 @@ if bar_index > right + 1 and right - 1 >= 0
         isPH := true
     else if isPH_type3() and allowPH3
         isPH := true
+    else if isPH_type4() and allowPH4
+        isPH := true
     
     // Check Pivot Low variants
     if isPL_type1() and allowPL1
@@ -156,6 +172,8 @@ if bar_index > right + 1 and right - 1 >= 0
     else if isPL_type2() and allowPL2
         isPL := true
     else if isPL_type3() and allowPL3
+        isPL := true
+    else if isPL_type4() and allowPL4
         isPL := true
     
     // Set pivot data if detected
@@ -197,39 +215,83 @@ if (isPH or isPL)
     accept = (tvar != "NA") and allowedByUser(tvar)
 
     if accept
-        // --- chèn pivot giả nếu 2 pivot liên tiếp cùng loại (giữ nguyên cơ chế của bạn) ---
+        // Check if we need to replace the last pivot (if same type and new one is better)
+        shouldReplaceLast = false
+        shouldSkipNew = false  // Flag to skip adding new pivot if old one is better
+        
         if pCount() > 0
             [lastBar, lastPrice, lastHigh] = getPivotFromEnd(0)
             newHigh = isPH
+            
+            // If last pivot is same type, check if new one is better
             if lastHigh == newHigh
                 gap = newPivotBar - lastBar - 1
-                if gap > 0
-                    firstBarInGap = lastBar + 1
-                    lastBarInGap  = newPivotBar - 1
-                    offsetFirst   = bar_index - firstBarInGap
-                    offsetLast    = bar_index - lastBarInGap
-                    if offsetFirst >= 0 and offsetLast >= 0
-                        float insertPrice = newHigh ? low[offsetFirst] : high[offsetFirst]
-                        int   insertBar   = firstBarInGap
-                        bool  insertHigh  = not newHigh
-                        for i = offsetFirst to offsetLast
-                            float candidate = newHigh ? low[i] : high[i]
-                            if (newHigh and candidate < insertPrice) or (not newHigh and candidate > insertPrice)
-                                insertPrice := candidate
-                                insertBar   := bar_index - i
-                        if insertBar > lastBar and insertBar < newPivotBar
-                            storePivot(insertBar, insertPrice, insertHigh)
-                            if drawWaves and not na(lastPivotBar)
-                                line.new(lastPivotBar, lastPivotPrice, insertBar, insertPrice, color=color.new(color.blue, 0), width=2)
-                            lastPivotBar   := insertBar
-                            lastPivotPrice := insertPrice
+                
+                // If consecutive (gap = 0, truly adjacent), choose the better one
+                if gap == 0
+                    if newHigh
+                        // Both are PH → keep the higher one
+                        if newPivotPrice > lastPrice
+                            shouldReplaceLast := true  // New is better → replace old
+                        else
+                            shouldSkipNew := true       // Old is better → skip new
+                    else
+                        // Both are PL → keep the lower one
+                        if newPivotPrice < lastPrice
+                            shouldReplaceLast := true  // New is better → replace old
+                        else
+                            shouldSkipNew := true       // Old is better → skip new
+        
+        // Replace last pivot if new one is better
+        if shouldReplaceLast
+            // Remove last pivot
+            array.pop(bars)
+            array.pop(prices)
+            array.pop(highs)
+            array.pop(volumes)
+            
+            // Store new pivot (will replace the removed one)
+            storePivot(newPivotBar, newPivotPrice, newPivotHigh)
+            if drawWaves and pCount() > 1
+                // Redraw wave from previous pivot
+                [prevBar, prevPrice, _] = getPivotFromEnd(1)
+                line.new(prevBar, prevPrice, newPivotBar, newPivotPrice, color=color.new(color.blue, 0), width=2)
+            lastPivotBar   := newPivotBar
+            lastPivotPrice := newPivotPrice
+        else if not shouldSkipNew
+            // Normal case: insert fake pivot if needed, then add new pivot
+            if pCount() > 0
+                [lastBar, lastPrice, lastHigh] = getPivotFromEnd(0)
+                newHigh = isPH
+                if lastHigh == newHigh
+                    gap = newPivotBar - lastBar - 1
+                    if gap > 0
+                        firstBarInGap = lastBar + 1
+                        lastBarInGap  = newPivotBar - 1
+                        offsetFirst   = bar_index - firstBarInGap
+                        offsetLast    = bar_index - lastBarInGap
+                        if offsetFirst >= 0 and offsetLast >= 0
+                            float insertPrice = newHigh ? low[offsetFirst] : high[offsetFirst]
+                            int   insertBar   = firstBarInGap
+                            bool  insertHigh  = not newHigh
+                            for i = offsetFirst to offsetLast
+                                float candidate = newHigh ? low[i] : high[i]
+                                if (newHigh and candidate < insertPrice) or (not newHigh and candidate > insertPrice)
+                                    insertPrice := candidate
+                                    insertBar   := bar_index - i
+                            if insertBar > lastBar and insertBar < newPivotBar
+                                storePivot(insertBar, insertPrice, insertHigh)
+                                if drawWaves and not na(lastPivotBar)
+                                    line.new(lastPivotBar, lastPivotPrice, insertBar, insertPrice, color=color.new(color.blue, 0), width=2)
+                                lastPivotBar   := insertBar
+                                lastPivotPrice := insertPrice
 
-        // Lưu pivot mới
-        storePivot(newPivotBar, newPivotPrice, newPivotHigh)
-        if drawWaves and not na(lastPivotBar)
-            line.new(lastPivotBar, lastPivotPrice, newPivotBar, newPivotPrice, color=color.new(color.blue, 0), width=2)
-        lastPivotBar   := newPivotBar
-        lastPivotPrice := newPivotPrice
+            // Lưu pivot mới
+            storePivot(newPivotBar, newPivotPrice, newPivotHigh)
+            if drawWaves and not na(lastPivotBar)
+                line.new(lastPivotBar, lastPivotPrice, newPivotBar, newPivotPrice, color=color.new(color.blue, 0), width=2)
+            lastPivotBar   := newPivotBar
+            lastPivotPrice := newPivotPrice
 
         // reset khóa CHoCH khi đã hình thành pivot sau cụm 8 trước đó
         if not na(lastEightBarIdx) and newPivotBar > lastEightBarIdx
@@ -245,6 +307,7 @@ if (isPH or isPL)
 // ========== 8-Pattern ==========
 var float pivot6 = na   // p6 (reference cho CHoCH)
 var float pivot5 = na   // p5 (additional reference cho CHoCH)
+var float pivot4 = na   // p4 (additional reference cho CHoCH)
 var float saved_p5 = na // Store p5 for pattern group confirmation
 var float saved_p7 = na // Store p7 for pattern group confirmation (G2)
 eightReady = pCount() >= 8
@@ -329,6 +392,7 @@ if eightReady
     if (lastEightDown or lastEightUp)
         pivot5 := p5
         pivot6 := p6
+        pivot4 := p4
         // Store pivot values for confirmation logic
         saved_p5 := p5
         saved_p7 := p7
@@ -344,18 +408,18 @@ var bool fireChochUp = false
 var bool fireChochDn = false
 var string matchedGroup = na  // Track which pattern group matched
 
-if eightReady and not na(pivot6) and not na(pivot5)
+if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
     // ========== 3-CANDLE CHoCH CONFIRMATION (matching Python logic) ==========
     // Pre-CHoCH [2] → CHoCH Bar [1] → Confirmation [0]
     
     // CHoCH Bar conditions (nến [1] - previous bar)
-    // CHoCH Up: low[1] > low[2] AND close[1] > high[2] AND close[1] > pivot6 AND close[1] < pivot2
+    // CHoCH Up: low[1] > low[2] AND close[1] > high[2] AND close[1] > pivot6 AND close[1] < pivot2 AND close[1] > pivot4
     chochUpBar = (low[1] > low[2]) and (close[1] > high[2]) and 
-                 (close[1] > pivot6) and (close[1] < p2_price)
+                 (close[1] > pivot6) and (close[1] < p2_price) and (close[1] > pivot4)
     
-    // CHoCH Down: high[1] < high[2] AND close[1] < low[2] AND close[1] < pivot6 AND close[1] > pivot2
+    // CHoCH Down: high[1] < high[2] AND close[1] < low[2] AND close[1] < pivot6 AND close[1] > pivot2 AND close[1] < pivot4
     chochDownBar = (high[1] < high[2]) and (close[1] < low[2]) and 
-                   (close[1] < pivot6) and (close[1] > p2_price)
+                   (close[1] < pivot6) and (close[1] > p2_price) and (close[1] < pivot4)
 
     // Confirmation conditions - Basic (nến [0] - current bar)
     // CHoCH Up confirmed: close của confirmation > high của nến pre-CHoCH [2]

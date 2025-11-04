@@ -31,7 +31,8 @@ class TimeframeState:
         self.last_eight_down = False
         self.last_eight_bar_idx: Optional[int] = None
         self.pivot5: Optional[float] = None  # Pivot 5 for additional CHoCH condition
-        self.pivot6: Optional[float] = None  # Changed from pivot4 to pivot6 for 8-pivot pattern
+        self.pivot6: Optional[float] = None  # Pivot 6 for CHoCH condition
+        self.pivot4: Optional[float] = None  # Pivot 4 for CHoCH condition (NEW)
         self.pattern_group: Optional[str] = None  # Store which group (G1, G2, G3) matched
         self.choch_locked = False
         self.choch_bar_idx: Optional[int] = None  # Bar where CHoCH triggered
@@ -63,6 +64,7 @@ class TimeframeState:
         self.last_eight_bar_idx = None
         self.pivot5 = None
         self.pivot6 = None
+        self.pivot4 = None
         self.pattern_group = None
         self.choch_locked = False
         self.choch_bar_idx = None
@@ -78,14 +80,29 @@ class TimeframeState:
         """Get pivot by index from end (0 = most recent)"""
         idx = len(self.prices) - 1 - idx_from_end
         return self.bars[idx], self.prices[idx], self.highs[idx]
+    
+    def remove_pivot_from_end(self, idx_from_end: int):
+        """Remove pivot by index from end (0 = most recent)"""
+        if idx_from_end == 0:
+            # Remove the most recent pivot
+            self.bars.pop()
+            self.prices.pop()
+            self.highs.pop()
+        else:
+            # For other indices, convert to regular index and delete
+            idx = len(self.prices) - 1 - idx_from_end
+            del self.bars[idx]
+            del self.prices[idx]
+            del self.highs[idx]
+        return self.bars[idx], self.prices[idx], self.highs[idx]
 
 
 class ChochDetector:
     """Main CHoCH detector with multi-timeframe support"""
     
     def __init__(self, left: int = 1, right: int = 1, keep_pivots: int = 200,
-                 allow_ph1: bool = True, allow_ph2: bool = True, allow_ph3: bool = True,
-                 allow_pl1: bool = True, allow_pl2: bool = True, allow_pl3: bool = True):
+                 allow_ph1: bool = True, allow_ph2: bool = True, allow_ph3: bool = True, allow_ph4: bool = True,
+                 allow_pl1: bool = True, allow_pl2: bool = True, allow_pl3: bool = True, allow_pl4: bool = True):
         
         self.left = left
         self.right = right
@@ -93,8 +110,8 @@ class ChochDetector:
         
         # CHỈ detect pivot theo variant pattern (giống Pine Script)
         self.allow_variants = {
-            'PH1': allow_ph1, 'PH2': allow_ph2, 'PH3': allow_ph3,
-            'PL1': allow_pl1, 'PL2': allow_pl2, 'PL3': allow_pl3
+            'PH1': allow_ph1, 'PH2': allow_ph2, 'PH3': allow_ph3, 'PH4': allow_ph4,
+            'PL1': allow_pl1, 'PL2': allow_pl2, 'PL3': allow_pl3, 'PL4': allow_pl4
         }
         
         # Per-timeframe states
@@ -203,6 +220,9 @@ class ChochDetector:
             # PH3: (h2 > h1 and h2 >= h3) and (l2 < l3 and l2 > l1)
             elif (h2 > h1 and h2 >= h3) and (l2 < l3 and l2 > l1):
                 return "PH3"
+            # PH4: (h2 >= h3 and h2 > h1) and (l2 <= l3 and l2 > l1)
+            elif (h2 >= h3 and h2 > h1) and (l2 <= l3 and l2 > l1):
+                return "PH4"
         else:
             # PL variants - EXACT Pine Script logic
             # PL1: (l2 < l1 and l2 < l3) and (h2 < h1 and h2 < h3)
@@ -211,9 +231,12 @@ class ChochDetector:
             # PL2: (h2 >= h1 and h2 < h3) and (l2 < l3 and l2 <= l1)
             elif (h2 >= h1 and h2 < h3) and (l2 < l3 and l2 <= l1):
                 return "PL2"
-            # PL3: (l2 < l1 and l2 < l3) and (h2 < h1 and h2 > h3)
-            elif (l2 < l1 and l2 < l3) and (h2 < h1 and h2 > h3):
+            # PL3: (l2 < l1 and l2 < l3) and (h2 < h1 and h2 >= h3)
+            elif (l2 < l1 and l2 < l3) and (h2 < h1 and h2 >= h3):
                 return "PL3"
+            # PL4: (h2 <= h3 and h2 < h1) and (l2 >= l3 and l2 <= l1)
+            elif (h2 <= h3 and h2 < h1) and (l2 >= l3 and l2 <= l1):
+                return "PL4"
         
         return "NA"
     
@@ -290,7 +313,7 @@ class ChochDetector:
         
         return False
     
-    def check_eight_pattern(self, state: TimeframeState, df: pd.DataFrame, pivot_offset: int = 0) -> Tuple[bool, bool, Optional[str], Optional[float], Optional[float], Optional[int], Optional[float]]:
+    def check_eight_pattern(self, state: TimeframeState, df: pd.DataFrame, pivot_offset: int = 0) -> Tuple[bool, bool, Optional[str], Optional[float], Optional[float], Optional[int], Optional[float], Optional[float]]:
         """
         Check for valid 8-pivot pattern (supports pattern groups G1, G2, G3)
         
@@ -299,14 +322,14 @@ class ChochDetector:
                          Used when CHoCH bar is the newest pivot to check pattern from previous 8 pivots
         
         Returns:
-            Tuple of (last_eight_up, last_eight_down, pattern_group, pivot5, pivot6, last_eight_bar_idx, p2)
+            Tuple of (last_eight_up, last_eight_down, pattern_group, pivot5, pivot6, last_eight_bar_idx, p2, p4)
         """
         logger.info(f"[CHECK_EIGHT_PATTERN] CALLED with offset={pivot_offset}, pivot_count={state.pivot_count()}")
         
         required_pivots = 8 + pivot_offset
         if state.pivot_count() < required_pivots:
             logger.info(f"[CHECK_EIGHT_PATTERN] Not enough pivots: {state.pivot_count()} < {required_pivots}")
-            return False, False, None, None, None, None, None
+            return False, False, None, None, None, None, None, None
         
         # ALWAYS use latest 8 pivots for pattern check (matching Pine Script logic)
         # Pine Script: getPivotFromEnd(0) = newest, getPivotFromEnd(7) = 8th from end
@@ -330,7 +353,7 @@ class ChochDetector:
         
         
         if not (up_struct or down_struct):
-            return False, False, None, None, None, None, None
+            return False, False, None, None, None, None, None, None
         
         # Check P7 retest P4 (for 8-pivot pattern)
         try:
@@ -350,10 +373,10 @@ class ChochDetector:
             
             if not touch_retest:
                 logger.info(f"[CHECK_EIGHT_PATTERN] Touch retest FAILED - returning False")
-                return False, False, None, None, None, None, None
+                return False, False, None, None, None, None, None, None
         except KeyError as e:
             logger.info(f"[CHECK_EIGHT_PATTERN] Touch retest KeyError: {e} - returning False")
-            return False, False, None, None, None, None, None
+            return False, False, None, None, None, None, None, None
         
         # Check P8 is extreme
         all_prices = [p1, p2, p3, p4, p5, p6, p7, p8]
@@ -427,9 +450,9 @@ class ChochDetector:
                 logger.info(f"[8-PIVOT-{pattern_group_result}] ✓✓✓ VALID DOWNTREND PATTERN (offset={pivot_offset}): P1:{p1:.6f}(H) -> P2:{p2:.6f}(L) -> P3:{p3:.6f}(H) -> P4:{p4:.6f}(L) -> P5:{p5:.6f}(H) -> P6:{p6:.6f}(L) -> P7:{p7:.6f}(H-retest P4) -> P8:{p8:.6f}(L)")
                 logger.info(f"   Breakout DOWN: high[5]({hi5:.6f}) < low[2]({lo2:.6f}) = {hi5 < lo2}")
             
-            return last_eight_up_result, last_eight_down_result, pattern_group_result, p5, p6, b8, p2
+            return last_eight_up_result, last_eight_down_result, pattern_group_result, p5, p6, b8, p2, p4
         
-        return False, False, None, None, None, None, None
+        return False, False, None, None, None, None, None, None
         
     def check_choch(self, df: pd.DataFrame, state: TimeframeState, 
                     current_idx: int) -> Tuple[bool, bool]:
@@ -517,17 +540,19 @@ class ChochDetector:
             return False, False
 
         # CHoCH conditions on previous bar (nến CHoCH - ĐÃ ĐÓNG)
-        # CHoCH Up: low[prev] > low[pre_prev] AND close[prev] > high[pre_prev] AND close[prev] > pivot6 AND close[prev] < pivot2
+        # CHoCH Up: low[prev] > low[pre_prev] AND close[prev] > high[pre_prev] AND close[prev] > pivot6 AND close[prev] < pivot2 AND close[prev] > pivot4
         choch_up_bar = (prev['low'] > pre_prev['low'] and 
                        prev['close'] > pre_prev['high'] and 
                        prev['close'] > state.pivot6 and
-                       prev['close'] < p2)
+                       prev['close'] < p2 and
+                       prev['close'] > state.pivot4)
         
-        # CHoCH Down: high[prev] < high[pre_prev] AND close[prev] < low[pre_prev] AND close[prev] < pivot6 AND close[prev] > pivot2
+        # CHoCH Down: high[prev] < high[pre_prev] AND close[prev] < low[pre_prev] AND close[prev] < pivot6 AND close[prev] > pivot2 AND close[prev] < pivot4
         choch_down_bar = (prev['high'] < pre_prev['high'] and 
                          prev['close'] < pre_prev['low'] and 
                          prev['close'] < state.pivot6 and
-                         prev['close'] > p2)
+                         prev['close'] > p2 and
+                         prev['close'] < state.pivot4)
 
         # ========== CHECK IF CHOCH BAR IS NEWEST PIVOT ==========
         # Nếu nến CHoCH (prev_idx) là pivot mới nhất, cần lấy pattern từ 8 pivot trước đó
@@ -760,11 +785,50 @@ class ChochDetector:
         for check_idx, pivot_price, is_high, variant in pivots:
             pivot_idx = df.index[check_idx]
             
-            # Insert fake pivot if needed (only once per gap)
+            # Check for consecutive same-type pivots
+            should_replace_last = False
+            should_skip_new = False
+            
             if state.pivot_count() > 0:
                 last_bar, last_price, last_high = state.get_pivot_from_end(0)
-                self.insert_fake_pivot(state, df, last_bar, last_price, last_high, 
-                                      pivot_idx, is_high)
+                
+                # If same type (both PH or both PL)
+                if last_high == is_high:
+                    # Calculate gap (bars BETWEEN pivots, not including pivot bars)
+                    gap = df.index.get_loc(pivot_idx) - df.index.get_loc(last_bar) - 1
+                    
+                    # Only handle if truly adjacent (gap=0)
+                    if gap == 0:
+                        # For PH: keep higher price
+                        # For PL: keep lower price
+                        if is_high and pivot_price > last_price:
+                            should_replace_last = True
+                            logger.debug(f"[CONSECUTIVE] Replace last PH {last_price:.6f} with new stronger PH {pivot_price:.6f}")
+                        elif is_high and pivot_price <= last_price:
+                            should_skip_new = True
+                            logger.debug(f"[CONSECUTIVE] Skip weaker new PH {pivot_price:.6f}, keep last PH {last_price:.6f}")
+                        elif not is_high and pivot_price < last_price:
+                            should_replace_last = True
+                            logger.debug(f"[CONSECUTIVE] Replace last PL {last_price:.6f} with new stronger PL {pivot_price:.6f}")
+                        elif not is_high and pivot_price >= last_price:
+                            should_skip_new = True
+                            logger.debug(f"[CONSECUTIVE] Skip weaker new PL {pivot_price:.6f}, keep last PL {last_price:.6f}")
+                    elif gap > 0:
+                        # Insert fake pivot between them
+                        self.insert_fake_pivot(state, df, last_bar, last_price, last_high, 
+                                              pivot_idx, is_high)
+                else:
+                    # Different types - check for fake pivot insertion
+                    self.insert_fake_pivot(state, df, last_bar, last_price, last_high, 
+                                          pivot_idx, is_high)
+            
+            # Replace last pivot if stronger consecutive found
+            if should_replace_last:
+                state.remove_pivot_from_end(0)
+            
+            # Skip new pivot if weaker than last
+            if should_skip_new:
+                continue
             
             # Store new pivot
             state.store_pivot(pivot_idx, pivot_price, is_high)
@@ -783,6 +847,7 @@ class ChochDetector:
             state.pivot6 = pattern_result[4]
             state.last_eight_bar_idx = pattern_result[5]
             # p2_price stored as pattern_result[6] but not saved to state (used in check_choch)
+            state.pivot4 = pattern_result[7]  # Store pivot4 for CHoCH condition
         
         pivot_after = state.pivot_count()
         logger.info(f"[rebuild_pivots] Final: {pivot_after} total pivots (with fakes)")
