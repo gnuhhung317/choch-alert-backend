@@ -292,7 +292,7 @@ class ChochDetector:
     
     def check_eight_pattern(self, state: TimeframeState, df: pd.DataFrame, pivot_offset: int = 0) -> Tuple[bool, bool, Optional[str], Optional[float], Optional[float], Optional[int], Optional[float]]:
         """
-        Check for valid 8-pivot pattern (or 10-pivot for G4/G5)
+        Check for valid 8-pivot pattern (supports pattern groups G1, G2, G3)
         
         Args:
             pivot_offset: Offset to shift pivot reading (0 = use latest pivots, 1 = skip latest pivot)
@@ -360,7 +360,7 @@ class ChochDetector:
         is_highest8 = p8 == max(all_prices)
         is_lowest8 = p8 == min(all_prices)
         
-        # Order constraints - Groups G1..G6
+        # Order constraints - Groups G1..G3
         # G1 (Original): 
         g1_up_order = (p2 < p4 < p6 < p8) and (p3 < p5 < p7)
         g1_down_order = (p3 > p5 > p7) and (p2 > p4 > p6 > p8)
@@ -449,16 +449,10 @@ class ChochDetector:
           * G1: Close_CF <= HIGH_5
           * G2: Close_CF <= HIGH_7
           * G3: Close_CF <= HIGH_5
-          * G4': Close_CF > P8 (requires 10 pivots)
-          * G5': Close_CF > P8 (requires 10 pivots)
-          * G6': Order conditions only (no additional price check)
         - Uptrend → CHoCH Down:
           * G1: Close_CF >= LOW_5
           * G2: Close_CF >= LOW_7
           * G3: Close_CF >= LOW_5
-          * G4: Close_CF < P8 (requires 10 pivots)
-          * G5: Close_CF < P8 (requires 10 pivots)
-          * G6: Order conditions only (no additional price check)
         
         Volume Conditions:
         - G1: (678_ok AND 456_ok) OR 45678_ok
@@ -466,7 +460,6 @@ class ChochDetector:
           * 456_ok: (Vol4 OR Vol6) max in {vol4, vol5, vol6}
           * 45678_ok: (Vol8 OR Vol_CHoCH) max in {vol4, vol5, vol6, vol7, vol8}
         - G2/G3: (Vol4 OR Vol5 OR Vol_CHoCH) max in cluster 456
-        - G4/G5/G6: No volume condition (volumeCondition = True)
         
         Returns: (fire_choch_up, fire_choch_down)
         """
@@ -639,32 +632,6 @@ class ChochDetector:
                 
                 if not volume_condition:
                     logger.debug(f"[G3] Volume condition failed - vol4={vol4:.0f} vol5={vol5:.0f} vol_choch={vol_choch:.0f} max={max_456:.0f}")
-            
-            elif state.pattern_group == "G4":
-                # G4': Downtrend → CHoCH Up, close_choch > p8
-                price_condition = current['close'] > p8
-                volume_condition = True  # No specific volume condition for G4
-                confirm_up = price_condition and volume_condition
-                
-                if price_condition:
-                    logger.debug(f"[G4] Price condition OK - close={current['close']:.6f} > p8={p8:.6f}")
-            
-            elif state.pattern_group == "G5":
-                # G5': Downtrend → CHoCH Up, close_choch > p8
-                price_condition = current['close'] > p8
-                volume_condition = True  # No specific volume condition for G5
-                confirm_up = price_condition and volume_condition
-                
-                if price_condition:
-                    logger.debug(f"[G5] Price condition OK - close={current['close']:.6f} > p8={p8:.6f}")
-            
-            elif state.pattern_group == "G6":
-                # G6': Order conditions only (p5 > p2, p7 > p4 already checked)
-                price_condition = True
-                volume_condition = True  # No specific volume condition for G6
-                confirm_up = price_condition and volume_condition
-                
-                logger.debug(f"[G6] Order conditions only - confirm_up=True")
         
         if base_down and state.pattern_group:
             # Uptrend → CHoCH Down (base_down đã bao gồm confirm_down_basic)
@@ -719,32 +686,6 @@ class ChochDetector:
                 
                 if not volume_condition:
                     logger.debug(f"[G3] Volume condition failed - vol4={vol4:.0f} vol5={vol5:.0f} vol_choch={vol_choch:.0f} max={max_456:.0f}")
-            
-            elif state.pattern_group == "G4":
-                # G4: Uptrend → CHoCH Down, close_choch < p8
-                price_condition = current['close'] < p8
-                volume_condition = True  # No specific volume condition for G4
-                confirm_down = price_condition and volume_condition
-                
-                if price_condition:
-                    logger.debug(f"[G4] Price condition OK - close={current['close']:.6f} < p8={p8:.6f}")
-            
-            elif state.pattern_group == "G5":
-                # G5: Uptrend → CHoCH Down, close_choch < p8
-                price_condition = current['close'] < p8
-                volume_condition = True  # No specific volume condition for G5
-                confirm_down = price_condition and volume_condition
-                
-                if price_condition:
-                    logger.debug(f"[G5] Price condition OK - close={current['close']:.6f} < p8={p8:.6f}")
-            
-            elif state.pattern_group == "G6":
-                # G6: Order conditions only (p5 < p2, p7 < p4 already checked)
-                price_condition = True
-                volume_condition = True  # No specific volume condition for G6
-                confirm_down = price_condition and volume_condition
-                
-                logger.debug(f"[G6] Order conditions only - confirm_down=True")
 
         # Fire signal nếu có confirmation và chưa lock
         if not state.choch_locked and (confirm_up or confirm_down):
