@@ -301,42 +301,33 @@ class ChochDetector:
         Returns:
             Tuple of (last_eight_up, last_eight_down, pattern_group, pivot5, pivot6, last_eight_bar_idx, p2)
         """
+        logger.info(f"[CHECK_EIGHT_PATTERN] CALLED with offset={pivot_offset}, pivot_count={state.pivot_count()}")
+        
         required_pivots = 8 + pivot_offset
         if state.pivot_count() < required_pivots:
+            logger.info(f"[CHECK_EIGHT_PATTERN] Not enough pivots: {state.pivot_count()} < {required_pivots}")
             return False, False, None, None, None, None, None
         
-        # Check if we have 10 pivots for G4/G5 groups
-        ten_ready = state.pivot_count() >= (10 + pivot_offset)
+        # ALWAYS use latest 8 pivots for pattern check (matching Pine Script logic)
+        # Pine Script: getPivotFromEnd(0) = newest, getPivotFromEnd(7) = 8th from end
+        # Python: get_pivot_from_end(0) = newest, get_pivot_from_end(7) = 8th from end
         
-        # Get pivots based on availability with offset
-        if ten_ready:
-            # Map to 10-pivot pattern (p1 = oldest, p10 = newest)
-            b10, p10, h10 = state.get_pivot_from_end(0 + pivot_offset)
-            b9, p9, h9 = state.get_pivot_from_end(1 + pivot_offset)
-            b8, p8, h8 = state.get_pivot_from_end(2 + pivot_offset)
-            b7, p7, h7 = state.get_pivot_from_end(3 + pivot_offset)
-            b6, p6, h6 = state.get_pivot_from_end(4 + pivot_offset)
-            b5, p5, h5 = state.get_pivot_from_end(5 + pivot_offset)
-            b4, p4, h4 = state.get_pivot_from_end(6 + pivot_offset)
-            b3, p3, h3 = state.get_pivot_from_end(7 + pivot_offset)
-            b2, p2, h2 = state.get_pivot_from_end(8 + pivot_offset)
-            b1, p1, h1 = state.get_pivot_from_end(9 + pivot_offset)
-        else:
-            # Fallback to 8-pivot pattern (p1 = oldest, p8 = newest)
-            b8, p8, h8 = state.get_pivot_from_end(0 + pivot_offset)
-            b7, p7, h7 = state.get_pivot_from_end(1 + pivot_offset)
-            b6, p6, h6 = state.get_pivot_from_end(2 + pivot_offset)
-            b5, p5, h5 = state.get_pivot_from_end(3 + pivot_offset)
-            b4, p4, h4 = state.get_pivot_from_end(4 + pivot_offset)
-            b3, p3, h3 = state.get_pivot_from_end(5 + pivot_offset)
-            b2, p2, h2 = state.get_pivot_from_end(6 + pivot_offset)
-            b1, p1, h1 = state.get_pivot_from_end(7 + pivot_offset)
-            # Initialize p9, p10 as None for 8-pivot mode
-            p9, p10 = None, None
+        # Map to 8-pivot pattern (p1 = oldest of the 8, p8 = newest)
+        b8, p8, h8 = state.get_pivot_from_end(0 + pivot_offset)
+        b7, p7, h7 = state.get_pivot_from_end(1 + pivot_offset)
+        b6, p6, h6 = state.get_pivot_from_end(2 + pivot_offset)
+        b5, p5, h5 = state.get_pivot_from_end(3 + pivot_offset)
+        b4, p4, h4 = state.get_pivot_from_end(4 + pivot_offset)
+        b3, p3, h3 = state.get_pivot_from_end(5 + pivot_offset)
+        b2, p2, h2 = state.get_pivot_from_end(6 + pivot_offset)
+        b1, p1, h1 = state.get_pivot_from_end(7 + pivot_offset)
+        
+        # NOTE: removed 10-pivot (G4/G5) handling — always use the latest 8 pivots
         
         # Check alternating structure for 8 pivots
         up_struct = (not h1) and h2 and (not h3) and h4 and (not h5) and h6 and (not h7) and h8
         down_struct = h1 and (not h2) and h3 and (not h4) and h5 and (not h6) and h7 and (not h8)
+        
         
         if not (up_struct or down_struct):
             return False, False, None, None, None, None, None
@@ -350,9 +341,18 @@ class ChochDetector:
             
             touch_retest = (up_struct and (lo7 < hi4)) or (down_struct and (hi7 > lo4))
             
+            logger.info(f"[CHECK_EIGHT_PATTERN] Touch retest check:")
+            logger.info(f"  b7={b7}, lo7={lo7:.6f}, hi7={hi7:.6f} (P7={p7:.6f})")
+            logger.info(f"  b4={b4}, hi4={hi4:.6f}, lo4={lo4:.6f} (P4={p4:.6f})")
+            logger.info(f"  up_struct={up_struct}, lo7 < hi4? {lo7:.6f} < {hi4:.6f} = {lo7 < hi4}")
+            logger.info(f"  down_struct={down_struct}, hi7 > lo4? {hi7:.6f} > {lo4:.6f} = {hi7 > lo4}")
+            logger.info(f"  → touch_retest={touch_retest}")
+            
             if not touch_retest:
+                logger.info(f"[CHECK_EIGHT_PATTERN] Touch retest FAILED - returning False")
                 return False, False, None, None, None, None, None
-        except KeyError:
+        except KeyError as e:
+            logger.info(f"[CHECK_EIGHT_PATTERN] Touch retest KeyError: {e} - returning False")
             return False, False, None, None, None, None, None
         
         # Check P8 is extreme
@@ -377,45 +377,27 @@ class ChochDetector:
         # Downtrend: p3 > p5 > p7, p2 > p6 > p4 > p8, p2 > p5
         g3_down_order = (p3 > p5 > p7) and (p2 > p6 > p4 > p8) and (p2 > p5)
         
-        # G4 (requires 10 pivots):
-        # Uptrend: p1 < p3 < p5 < p7 < p9, p2 < p8 < p4 < p6 < p10
-        g4_up_order = ten_ready and (p1 < p3 < p5 < p7 < p9) and (p2 < p8 < p4 < p6 < p10)
-        # Downtrend: reverse inequalities
-        g4_down_order = ten_ready and (p1 > p3 > p5 > p7 > p9) and (p2 > p8 > p4 > p6 > p10)
-        
-        # G5 (requires 10 pivots):
-        # Uptrend: p1 < p3 < p5 < p9 < p7, p2 < p8 < p4 < p6 < p10
-        g5_up_order = ten_ready and (p1 < p3 < p5 < p9 < p7) and (p2 < p8 < p4 < p6 < p10)
-        # Downtrend mirror
-        g5_down_order = ten_ready and (p1 > p3 > p5 > p9 > p7) and (p2 > p8 > p4 > p6 > p10)
-        
-        # G6 (uses up to p8):
-        # Uptrend: p1 < p3 < p5 < p7, p2 < p4 < p6 < p8, p5 < p2, p7 < p4
-        g6_up_order = (p1 < p3 < p5 < p7) and (p2 < p4 < p6 < p8) and (p5 < p2) and (p7 < p4)
-        # Downtrend mirror
-        g6_down_order = (p1 > p3 > p5 > p7) and (p2 > p4 > p6 > p8) and (p5 > p2) and (p7 > p4)
-        
-        # Combined order check (any group is valid)
-        up_order_ok = g1_up_order or g2_up_order or g3_up_order or g4_up_order or g5_up_order or g6_up_order
-        down_order_ok = g1_down_order or g2_down_order or g3_down_order or g4_down_order or g5_down_order or g6_down_order
-        
+        # Removed G4/G5/G6 (10-pivot groups). Keep only G1..G3 order checks.
+        # Combined order check (any of G1, G2, G3 is valid)
+        up_order_ok = g1_up_order or g2_up_order or g3_up_order
+        down_order_ok = g1_down_order or g2_down_order or g3_down_order
+
         # Breakout conditions (simplified - removed p1/p3 comparisons)
         try:
-            # For uptrend: low[5] > high[2] (bỏ low[3] > low[1])
+            # For uptrend: low[5] > high[2]
             lo5 = df.loc[b5, 'low']
             hi2 = df.loc[b2, 'high']
-            
-            # For downtrend: high[5] < low[2] (bỏ high[3] < high[1])
+
+            # For downtrend: high[5] < low[2]
             hi5 = df.loc[b5, 'high']
             lo2 = df.loc[b2, 'low']
-            
+
             up_breakout = (lo5 > hi2)
             down_breakout = (hi5 < lo2)
-            
+
         except KeyError:
             up_breakout = False
             down_breakout = False
-        
         # Validate pattern - uptrend cần up_breakout, downtrend cần down_breakout
         last_eight_up_result = up_struct and up_order_ok and touch_retest and is_highest8 and up_breakout
         last_eight_down_result = down_struct and down_order_ok and touch_retest and is_lowest8 and down_breakout
@@ -431,12 +413,6 @@ class ChochDetector:
                     pattern_group_result = "G2"
                 elif g3_up_order:
                     pattern_group_result = "G3"
-                elif g4_up_order:
-                    pattern_group_result = "G4"
-                elif g5_up_order:
-                    pattern_group_result = "G5"
-                elif g6_up_order:
-                    pattern_group_result = "G6"
                     
                 logger.info(f"[8-PIVOT-{pattern_group_result}] ✓✓✓ VALID UPTREND PATTERN (offset={pivot_offset}): P1:{p1:.6f}(L) -> P2:{p2:.6f}(H) -> P3:{p3:.6f}(L) -> P4:{p4:.6f}(H) -> P5:{p5:.6f}(L) -> P6:{p6:.6f}(H) -> P7:{p7:.6f}(L-retest P4) -> P8:{p8:.6f}(H)")
                 logger.info(f"   Breakout UP: low[5]({lo5:.6f}) > high[2]({hi2:.6f}) = {lo5 > hi2}")
@@ -447,12 +423,6 @@ class ChochDetector:
                     pattern_group_result = "G2"
                 elif g3_down_order:
                     pattern_group_result = "G3"
-                elif g4_down_order:
-                    pattern_group_result = "G4"
-                elif g5_down_order:
-                    pattern_group_result = "G5"
-                elif g6_down_order:
-                    pattern_group_result = "G6"
                     
                 logger.info(f"[8-PIVOT-{pattern_group_result}] ✓✓✓ VALID DOWNTREND PATTERN (offset={pivot_offset}): P1:{p1:.6f}(H) -> P2:{p2:.6f}(L) -> P3:{p3:.6f}(H) -> P4:{p4:.6f}(L) -> P5:{p5:.6f}(H) -> P6:{p6:.6f}(L) -> P7:{p7:.6f}(H-retest P4) -> P8:{p8:.6f}(L)")
                 logger.info(f"   Breakout DOWN: high[5]({hi5:.6f}) < low[2]({lo2:.6f}) = {hi5 < lo2}")
@@ -601,23 +571,23 @@ class ChochDetector:
         if not is_after_eight:
             return False, False
 
-        # Match with pattern direction (use effective values)
-        base_up = is_after_eight and effective_last_eight_down and choch_up_bar
-        base_down = is_after_eight and effective_last_eight_up and choch_down_bar
-
-        # Confirmation conditions (TẤT CẢ ĐỀU ĐÃ ĐÓNG):
+        # Basic confirmation conditions (KHÔNG phụ thuộc base):
         # CHoCH Up: close của confirmation > high của nến pre-CHoCH
-        confirm_up_basic = base_up and (current['close'] > pre_prev['high'])
+        confirm_up_basic = (current['close'] > pre_prev['high'])
         
         # CHoCH Down: close của confirmation < low của nến pre-CHoCH
-        confirm_down_basic = base_down and (current['close'] < pre_prev['low'])
+        confirm_down_basic = (current['close'] < pre_prev['low'])
+
+        # Match with pattern direction (use effective values) - THÊM confirmation vào base như Pine Script
+        base_up = is_after_eight and effective_last_eight_down and choch_up_bar and confirm_up_basic
+        base_down = is_after_eight and effective_last_eight_up and choch_down_bar and confirm_down_basic
 
         # Pattern Group Specific Conditions for confirmation candle
         confirm_up = False
         confirm_down = False
         
-        if confirm_up_basic and state.pattern_group:
-            # Downtrend → CHoCH Up
+        if base_up and state.pattern_group:
+            # Downtrend → CHoCH Up (base_up đã bao gồm confirm_up_basic)
             price_condition = False
             volume_condition = False
             
@@ -696,8 +666,8 @@ class ChochDetector:
                 
                 logger.debug(f"[G6] Order conditions only - confirm_up=True")
         
-        if confirm_down_basic and state.pattern_group:
-            # Uptrend → CHoCH Down
+        if base_down and state.pattern_group:
+            # Uptrend → CHoCH Down (base_down đã bao gồm confirm_down_basic)
             price_condition = False
             volume_condition = False
             
