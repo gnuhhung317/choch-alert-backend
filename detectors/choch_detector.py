@@ -586,23 +586,12 @@ class ChochDetector:
                 effective_last_eight_up = pattern_result[0]
                 effective_last_eight_down = pattern_result[1]
                 effective_eight_bar_idx = pattern_result[5]  # b8 from offset pivots
-                # Also need to recalculate CHoCH conditions with new p2
-                effective_p2 = pattern_result[6]
                 
-                # Recalculate CHoCH bar conditions with effective p2
-                choch_up_bar = (prev['low'] > pre_prev['low'] and 
-                               prev['close'] > pre_prev['high'] and 
-                               prev['close'] > state.pivot6 and
-                               prev['close'] < effective_p2)
-                
-                choch_down_bar = (prev['high'] < pre_prev['high'] and 
-                                 prev['close'] < pre_prev['low'] and 
-                                 prev['close'] < state.pivot6 and
-                                 prev['close'] > effective_p2)
+                # NOTE: KHÔNG recalculate choch_up_bar/choch_down_bar như Pine Script
+                # Pine Script chỉ thay đổi effectiveLastEightUp/Down, không đổi điều kiện CHoCH
                 
                 logger.debug(f"[CHoCH] Effective pattern: up={effective_last_eight_up}, down={effective_last_eight_down}")
                 logger.debug(f"[CHoCH] Effective eight_bar_idx: {effective_eight_bar_idx} (was {state.last_eight_bar_idx})")
-                logger.debug(f"[CHoCH] Effective p2: {effective_p2:.6f} (was {p2:.6f})")
             else:
                 logger.debug(f"[CHoCH] No valid pattern found with offset=1, using current state")
         
