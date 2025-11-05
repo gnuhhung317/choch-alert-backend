@@ -97,7 +97,7 @@ class Trade:
     sl_price: float
     exit_price: float
     exit_timestamp: pd.Timestamp
-    exit_reason: str  # 'TP', 'SL'
+    exit_reason: str  # 'TP', 'SL', 'FORCED_CLOSE_NEW_SIGNAL'
     
     # P&L
     pnl_percentage: float
@@ -237,7 +237,15 @@ class BacktestEngine:
             # Rebuild pivots from window (matching production logic)
             pivot_count = self.detector.rebuild_pivots(key, window_df)
             
-            # Check for CHoCH signal
+            # ========== FIX BUG 2: PREVENT LOOK-AHEAD BIAS ==========
+            # Check orders BEFORE detecting new signal on current bar
+            # This ensures orders can only fill on bars AFTER signal creation
+            current_bar = df.iloc[i]
+            current_idx = df.index[i]
+            await self.check_orders(current_bar, current_idx)
+            
+            # Check for CHoCH signal on CURRENT BAR (bar i)
+            # Signal is based on CLOSED candle, so we know all OHLC
             if i >= 52:  # Need at least 3 bars for confirmation
                 result = self.detector.process_new_bar(key, window_df)
                 
@@ -245,18 +253,15 @@ class BacktestEngine:
                     signal_count += 1
                     logger.info(f"\n[SIGNAL #{signal_count}] {result.get('signal_type')} @ {window_df.index[-1]}")
                     
-                    # Process CHoCH signal
+                    # Process CHoCH signal - creates orders for FUTURE bars
                     await self.on_choch_signal(
                         symbol=symbol,
                         timeframe=timeframe,
                         df=window_df,
                         result=result
                     )
-            
-            # Check pending orders against current bar
-            current_bar = df.iloc[i]
-            current_idx = df.index[i]
-            await self.check_orders(current_bar, current_idx)
+                    # NOTE: Orders created here can only fill on bar i+1 and later
+                    # because check_orders was already called for bar i above
         
         # Calculate backtest results
         result = self.calculate_results(symbol, timeframe, df)
@@ -300,10 +305,42 @@ class BacktestEngine:
         choch_price = result.get('price')
         choch_timestamp = result.get('timestamp')
         
-        # Cancel existing orders if any (new signal)
+        # ========== FIX BUG 1: HANDLE OVERLAPPING SIGNALS ==========
+        # If there's an existing trade, we MUST close it first before opening new one
         if self.current_trade is not None:
-            logger.info("Cancelling previous trade orders (new signal)")
-            self.cancel_all_orders()
+            logger.warning("⚠️  OVERLAPPING SIGNAL DETECTED!")
+            
+            # Check if old trade has any position filled
+            has_old_position = (self.current_trade['entry1_filled'] or 
+                              self.current_trade['entry2_filled'])
+            
+            if has_old_position:
+                logger.warning("⚠️  Old trade has OPEN POSITION - Force closing at market!")
+                logger.info(f"   Old trade direction: {self.current_trade['direction']}")
+                logger.info(f"   Entry1 filled: {self.current_trade['entry1_filled']}")
+                logger.info(f"   Entry2 filled: {self.current_trade['entry2_filled']}")
+                
+                # Force close at current market price (use CHoCH bar close as approximation)
+                # In reality, this would be a market order at next open
+                force_exit_price = choch_price
+                force_exit_reason = 'FORCED_CLOSE_NEW_SIGNAL'
+                
+                logger.info(f"   Force exit at: {force_exit_price:.8f}")
+                
+                # Cancel all pending orders first
+                self.cancel_all_orders()
+                
+                # Close the old trade with market price
+                self.close_trade(force_exit_reason, force_exit_price, choch_timestamp)
+                
+                logger.info("✓ Old position closed, ready for new signal")
+            else:
+                # No position filled yet, just cancel orders
+                logger.info("   Old trade has no position - only cancelling orders")
+                self.cancel_all_orders()
+                # Reset current trade since no position to close
+                self.current_trade = None
+                self.pending_orders = []
         
         # Setup new trade
         if direction == 'Long':
@@ -429,12 +466,17 @@ class BacktestEngine:
         close = bar['close']
         direction = self.current_trade['direction']
         
+        # Check if we have any position (at least 1 entry filled)
+        has_position = self.current_trade['entry1_filled'] or self.current_trade['entry2_filled']
+        
         # Check each pending order
+        # Priority: ENTRY orders first, then TP/SL (only if has position)
         for order in self.pending_orders[:]:  # Copy list to allow modification
             if order.status != OrderStatus.PENDING:
                 continue
             
             filled = False
+            fill_price = None
             
             if direction == 'Long':
                 # Long orders
@@ -451,8 +493,8 @@ class BacktestEngine:
                         fill_price = order.price
                 
                 elif order.order_type == OrderType.TAKE_PROFIT:
-                    # TP at or above tp price
-                    if high >= order.price:
+                    # TP only triggers if we have position
+                    if has_position and high >= order.price:
                         filled = True
                         fill_price = order.price
                         self.current_trade['tp_hit'] = True
@@ -463,8 +505,8 @@ class BacktestEngine:
                         self.close_trade('TP', fill_price, timestamp)
                 
                 elif order.order_type == OrderType.STOP_LOSS:
-                    # SL at or below sl price
-                    if low <= order.price:
+                    # SL only triggers if we have position
+                    if has_position and low <= order.price:
                         filled = True
                         fill_price = order.price
                         self.current_trade['sl_hit'] = True
@@ -489,8 +531,8 @@ class BacktestEngine:
                         fill_price = order.price
                 
                 elif order.order_type == OrderType.TAKE_PROFIT:
-                    # TP at or below tp price
-                    if low <= order.price:
+                    # TP only triggers if we have position
+                    if has_position and low <= order.price:
                         filled = True
                         fill_price = order.price
                         self.current_trade['tp_hit'] = True
@@ -501,8 +543,8 @@ class BacktestEngine:
                         self.close_trade('TP', fill_price, timestamp)
                 
                 elif order.order_type == OrderType.STOP_LOSS:
-                    # SL at or above sl price
-                    if high >= order.price:
+                    # SL only triggers if we have position
+                    if has_position and high >= order.price:
                         filled = True
                         fill_price = order.price
                         self.current_trade['sl_hit'] = True
@@ -522,10 +564,12 @@ class BacktestEngine:
                     if order.order_type == OrderType.ENTRY1:
                         self.current_trade['entry1_filled'] = True
                         self.current_trade['entry1_timestamp'] = timestamp
+                        has_position = True  # Update position flag
                         logger.info(f"[ENTRY 1 FILLED] @ {fill_price:.8f} on {timestamp}")
                     else:
                         self.current_trade['entry2_filled'] = True
                         self.current_trade['entry2_timestamp'] = timestamp
+                        has_position = True  # Update position flag
                         logger.info(f"[ENTRY 2 FILLED] @ {fill_price:.8f} on {timestamp}")
     
     def cancel_all_orders(self, except_order: Optional[Order] = None):
@@ -543,33 +587,58 @@ class BacktestEngine:
         trade = self.current_trade
         direction = trade['direction']
         
-        # Calculate average entry price
-        entry_prices = []
-        entry_timestamps = []
+        # Calculate position-weighted entry price and total P&L
+        entry1_filled = trade['entry1_filled']
+        entry2_filled = trade['entry2_filled']
         
-        if trade['entry1_filled']:
-            entry_prices.append(trade['en1'])
-            entry_timestamps.append(trade.get('entry1_timestamp'))
-        
-        if trade['entry2_filled']:
-            entry_prices.append(trade['en2'])
-            entry_timestamps.append(trade.get('entry2_timestamp'))
-        
-        if len(entry_prices) == 0:
-            logger.warning("Trade closed but no entries were filled!")
+        # Validate: Must have at least one entry filled
+        if not entry1_filled and not entry2_filled:
+            logger.error("❌ CRITICAL ERROR: Trade closed but NO entries were filled!")
+            logger.error(f"   Direction: {direction}, Exit: {exit_price}, Reason: {reason}")
+            logger.error("   This should NEVER happen in real trading!")
             self.current_trade = None
+            self.pending_orders = []
             return
         
-        avg_entry = sum(entry_prices) / len(entry_prices)
+        # Calculate weighted entry price based on position sizes
+        # Each entry = 50% of total position
+        total_position = 0
+        weighted_entry = 0
+        entry_timestamps = []
+        
+        if entry1_filled:
+            entry1_size = 0.5  # 50% position
+            weighted_entry += trade['en1'] * entry1_size
+            total_position += entry1_size
+            entry_timestamps.append(trade.get('entry1_timestamp'))
+            logger.info(f"   Entry 1: {trade['en1']:.8f} (50% position)")
+        
+        if entry2_filled:
+            entry2_size = 0.5  # 50% position
+            weighted_entry += trade['en2'] * entry2_size
+            total_position += entry2_size
+            entry_timestamps.append(trade.get('entry2_timestamp'))
+            logger.info(f"   Entry 2: {trade['en2']:.8f} (50% position)")
+        
+        avg_entry = weighted_entry / total_position
         first_entry_time = min([t for t in entry_timestamps if t is not None])
         
-        # Calculate P&L
+        logger.info(f"   Total Position: {total_position*100:.0f}%")
+        logger.info(f"   Weighted Avg Entry: {avg_entry:.8f}")
+        
+        # Calculate P&L percentage based on weighted average entry
         if direction == 'Long':
             pnl_pct = ((exit_price - avg_entry) / avg_entry) * 100
         else:  # Short
             pnl_pct = ((avg_entry - exit_price) / avg_entry) * 100
         
-        pnl_abs = exit_price - avg_entry  # Simplified, not accounting for position size
+        # Adjust P&L by actual position size (if only 1 entry filled, P&L is halved)
+        actual_pnl_pct = pnl_pct * total_position
+        
+        pnl_abs = (exit_price - avg_entry) * total_position if direction == 'Long' else (avg_entry - exit_price) * total_position
+        
+        logger.info(f"   Full Position P&L: {pnl_pct:+.2f}%")
+        logger.info(f"   Actual P&L ({total_position*100:.0f}% position): {actual_pnl_pct:+.2f}%")
         
         # Create trade record
         trade_record = Trade(
@@ -592,7 +661,7 @@ class BacktestEngine:
             exit_timestamp=exit_timestamp,
             exit_reason=reason,
             
-            pnl_percentage=pnl_pct,
+            pnl_percentage=actual_pnl_pct,  # Use position-adjusted P&L
             pnl_absolute=pnl_abs,
             
             pivot5=trade['pivot5'],
@@ -604,7 +673,7 @@ class BacktestEngine:
         self.completed_trades.append(trade_record)
         self.trade_counter += 1
         
-        logger.info(f"[TRADE CLOSED] {reason} | P&L: {pnl_pct:+.2f}% | Avg Entry: {avg_entry:.8f} | Exit: {exit_price:.8f}")
+        logger.info(f"[TRADE CLOSED] {reason} | P&L: {actual_pnl_pct:+.2f}% | Avg Entry: {avg_entry:.8f} | Exit: {exit_price:.8f}")
         
         # Reset current trade
         self.current_trade = None
@@ -742,9 +811,13 @@ async def main():
         allow_ph1=config.ALLOW_PH1,
         allow_ph2=config.ALLOW_PH2,
         allow_ph3=config.ALLOW_PH3,
+        allow_ph4=config.ALLOW_PH4,
+        allow_ph5=config.ALLOW_PH5,
         allow_pl1=config.ALLOW_PL1,
         allow_pl2=config.ALLOW_PL2,
-        allow_pl3=config.ALLOW_PL3
+        allow_pl3=config.ALLOW_PL3,
+        allow_pl4=config.ALLOW_PL4,
+        allow_pl5=config.ALLOW_PL5
     )
     
     # Create backtest engine

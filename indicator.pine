@@ -17,10 +17,12 @@ allowPH1 = input.bool(true,  "Cho phép PH loại 1")
 allowPH2 = input.bool(true,  "Cho phép PH loại 2 (con là nến #1)")
 allowPH3 = input.bool(true,  "Cho phép PH loại 3 (biến thể khác)")
 allowPH4 = input.bool(true,  "Cho phép PH loại 4")
+allowPH5 = input.bool(true,  "Cho phép PH loại 5")
 allowPL1 = input.bool(true,  "Cho phép PL loại 1")
 allowPL2 = input.bool(true,  "Cho phép PL loại 2 (con là nến #1)")
 allowPL3 = input.bool(true,  "Cho phép PL loại 3 (biến thể khác)")
 allowPL4 = input.bool(true,  "Cho phép PL loại 4")
+allowPL5 = input.bool(true,  "Cho phép PL loại 5")
 showVariantLabel = input.bool(false, "Hiển thị mã biến thể trên chart")
 
 var bool chochLocked = false 
@@ -98,6 +100,10 @@ isPH_type4() =>
     [h1,h2,h3,l1,l2,l3] = getHLTripletAroundMid()
     not na(h1) and not na(h3) and (h2 >= h3 and h2 > h1) and (l2 <= l3 and l2 > l1)
 
+isPH_type5() =>
+    [h1,h2,h3,l1,l2,l3] = getHLTripletAroundMid()
+    not na(h1) and not na(h3) and (h2 >= h3 and h2 >= h1) and (l2 <= l3 and l2 > l1)
+
 isPL_type1() =>
     [h1,h2,h3,l1,l2,l3] = getHLTripletAroundMid()
     not na(h1) and not na(h3) and (l2 < l1 and l2 < l3) and (h2 < h1 and h2 < h3)
@@ -114,18 +120,24 @@ isPL_type4() =>
     [h1,h2,h3,l1,l2,l3] = getHLTripletAroundMid()
     not na(h1) and not na(h3) and (h2 <= h3 and h2 < h1) and (l2 >= l3 and l2 <= l1)
 
+isPL_type5() =>
+    [h1,h2,h3,l1,l2,l3] = getHLTripletAroundMid()
+    not na(h1) and not na(h3) and (h2 >= h3 and h2 < h1) and (l2 <= l3 and l2 <= l1)
+
 classifyPivotVariant(isHighPivot) =>
     var string t = "NA"
     if isHighPivot
         t := isPH_type1() ? "PH1" :
              isPH_type2() ? "PH2" :
              isPH_type3() ? "PH3" :
-             isPH_type4() ? "PH4" : "NA"
+             isPH_type4() ? "PH4" :
+             isPH_type5() ? "PH5" : "NA"
     else
         t := isPL_type1() ? "PL1" :
              isPL_type2() ? "PL2" :
              isPL_type3() ? "PL3" :
-             isPL_type4() ? "PL4" : "NA"
+             isPL_type4() ? "PL4" :
+             isPL_type5() ? "PL5" : "NA"
     t
 
 allowedByUser(t) =>
@@ -134,10 +146,12 @@ allowedByUser(t) =>
         "PH2" => allowPH2
         "PH3" => allowPH3
         "PH4" => allowPH4
+        "PH5" => allowPH5
         "PL1" => allowPL1
         "PL2" => allowPL2
         "PL3" => allowPL3
         "PL4" => allowPL4
+        "PL5" => allowPL5
         => false
 
 // ========== Custom Pivot Detection (không dùng ta.pivot*) ==========
@@ -165,6 +179,8 @@ if bar_index > right + 1 and right - 1 >= 0
         isPH := true
     else if isPH_type4() and allowPH4
         isPH := true
+    else if isPH_type5() and allowPH5
+        isPH := true
     
     // Check Pivot Low variants
     if isPL_type1() and allowPL1
@@ -174,6 +190,8 @@ if bar_index > right + 1 and right - 1 >= 0
     else if isPL_type3() and allowPL3
         isPL := true
     else if isPL_type4() and allowPL4
+        isPL := true
+    else if isPL_type5() and allowPL5
         isPL := true
     
     // Set pivot data if detected
@@ -498,19 +516,16 @@ if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
             // G1: Close_CF <= HIGH_5
             priceCondition := close <= saved_p5
             
-            // (Vol8 OR Vol6 OR Vol_CHoCH) là lớn nhất cụm 678
+            // Volume condition G1: 678_ok AND 456_ok
+            // 1. (Vol8 OR Vol6 OR Vol_CHoCH) là lớn nhất cụm 678
             max_678 = math.max(vol6, math.max(vol7, vol8))
             vol_678_ok = (vol8 == max_678) or (vol6 == max_678) or (vol_choch == max_678)
             
-            // (Vol4 OR Vol6) là lớn nhất cụm 456
+            // 2. (Vol4 OR Vol6) là lớn nhất cụm 456
             max_456 = math.max(vol4, math.max(vol5, vol6))
             vol_456_ok = (vol4 == max_456) or (vol6 == max_456)
             
-            // (Vol8 OR Vol_CHoCH) là lớn nhất cụm 45678
-            max_45678 = math.max(vol4, math.max(vol5, math.max(vol6, math.max(vol7, vol8))))
-            vol_45678_ok = (vol8 == max_45678) or (vol_choch >= max_45678)
-            
-            volumeCondition := (vol_678_ok and vol_456_ok) or vol_45678_ok
+            volumeCondition := vol_678_ok and vol_456_ok
             confirmUp := priceCondition and volumeCondition
             
         else if matchedGroup == "G2"
@@ -518,9 +533,9 @@ if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
             priceCondition := close <= saved_p7
             
             // Volume condition G2/G3:
-            // (Vol4 OR Vol5 OR Vol_CHoCH) là lớn nhất cụm 456
-            max_456 = math.max(vol4, math.max(vol5, vol6))
-            volumeCondition := (vol4 == max_456) or (vol5 == max_456) or (vol_choch >= max_456)
+            // (Vol4 OR Vol8 OR Vol_CHoCH) là lớn nhất cụm 45678
+            max_45678 = math.max(vol4, math.max(vol5, math.max(vol6, math.max(vol7, vol8))))
+            volumeCondition := (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch == max_45678)
             confirmUp := priceCondition and volumeCondition
             
         else if matchedGroup == "G3"
@@ -528,9 +543,9 @@ if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
             priceCondition := close <= saved_p5
             
             // Volume condition G2/G3:
-            // (Vol4 OR Vol5 OR Vol_CHoCH) là lớn nhất cụm 456
-            max_456 = math.max(vol4, math.max(vol5, vol6))
-            volumeCondition := (vol4 == max_456) or (vol5 == max_456) or (vol_choch >= max_456)
+            // (Vol4 OR Vol8 OR Vol_CHoCH) là lớn nhất cụm 45678
+            max_45678 = math.max(vol4, math.max(vol5, math.max(vol6, math.max(vol7, vol8))))
+            volumeCondition := (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch == max_45678)
             confirmUp := priceCondition and volumeCondition
 
         // Additional groups for Up confirmation (Downtrend -> CHoCH Up): G4', G5', G6'
@@ -545,19 +560,16 @@ if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
             // G1: Close_CF >= LOW_5
             priceCondition := close >= saved_p5
             
-            // (Vol8 OR Vol6 OR Vol_CHoCH) là lớn nhất cụm 678
+            // Volume condition G1: 678_ok AND 456_ok
+            // 1. (Vol8 OR Vol6 OR Vol_CHoCH) là lớn nhất cụm 678
             max_678 = math.max(vol6, math.max(vol7, vol8))
             vol_678_ok = (vol8 == max_678) or (vol6 == max_678) or (vol_choch == max_678)
             
-            // (Vol4 OR Vol6) là lớn nhất cụm 456
+            // 2. (Vol4 OR Vol6) là lớn nhất cụm 456
             max_456 = math.max(vol4, math.max(vol5, vol6))
             vol_456_ok = (vol4 == max_456) or (vol6 == max_456)
             
-            // (Vol8 OR Vol_CHoCH) là lớn nhất cụm 45678
-            max_45678 = math.max(vol4, math.max(vol5, math.max(vol6, math.max(vol7, vol8))))
-            vol_45678_ok = (vol8 == max_45678) or (vol_choch >= max_45678)
-            
-            volumeCondition := (vol_678_ok and vol_456_ok) or vol_45678_ok
+            volumeCondition := vol_678_ok and vol_456_ok
             confirmDown := priceCondition and volumeCondition
             
         else if matchedGroup == "G2"
@@ -565,9 +577,9 @@ if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
             priceCondition := close >= saved_p7
             
             // Volume condition G2/G3:
-            // (Vol4 OR Vol5 OR Vol_CHoCH) là lớn nhất cụm 456
-            max_456 = math.max(vol4, math.max(vol5, vol6))
-            volumeCondition := (vol4 == max_456) or (vol5 == max_456) or (vol_choch >= max_456)
+            // (Vol4 OR Vol8 OR Vol_CHoCH) là lớn nhất cụm 45678
+            max_45678 = math.max(vol4, math.max(vol5, math.max(vol6, math.max(vol7, vol8))))
+            volumeCondition := (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch == max_45678)
             confirmDown := priceCondition and volumeCondition
             
         else if matchedGroup == "G3"
@@ -575,9 +587,9 @@ if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
             priceCondition := close >= saved_p5
             
             // Volume condition G2/G3:
-            // (Vol4 OR Vol5 OR Vol_CHoCH) là lớn nhất cụm 456
-            max_456 = math.max(vol4, math.max(vol5, vol6))
-            volumeCondition := (vol4 == max_456) or (vol5 == max_456) or (vol_choch >= max_456)
+            // (Vol4 OR Vol8 OR Vol_CHoCH) là lớn nhất cụm 45678
+            max_45678 = math.max(vol4, math.max(vol5, math.max(vol6, math.max(vol7, vol8))))
+            volumeCondition := (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch == max_45678)
             confirmDown := priceCondition and volumeCondition
 
         // New groups for Down confirmation (Uptrend -> CHoCH Down)
