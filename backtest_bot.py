@@ -793,7 +793,7 @@ async def main():
     logger.info("="*80 + "\n")
     
     # Configuration - FULL MARKET SCAN
-    TIMEFRAMES = ["30m","1h"]  # Timeframes to test
+    TIMEFRAMES = ["30m","1h","15m","25m","45m"]  # Timeframes to test
     LIMIT = 1000        # Number of historical bars per symbol
     
     # Initialize components
