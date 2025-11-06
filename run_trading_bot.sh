@@ -32,10 +32,21 @@ pip3 install -q -r requirements.txt
 
 echo ""
 echo "========================================"
-echo "Starting trading bot..."
+echo "Starting trading bot in background..."
 echo "Press Ctrl+C to stop"
 echo "========================================"
 echo ""
 
-# Run the bot
-python3 trading_bot.py
+# Run the bot in background (detached mode)
+nohup python3 trading_bot.py > trading_bot.log 2>&1 &
+BOT_PID=$!
+
+echo "✓ Trading bot started in background"
+echo "  PID: $BOT_PID"
+echo "  Log file: trading_bot.log"
+echo ""
+echo "Commands:"
+echo "  tail -f trading_bot.log    # View live logs"
+echo "  kill $BOT_PID              # Stop the bot"
+echo "  ps aux | grep trading_bot  # Check if running"
+echo ""
