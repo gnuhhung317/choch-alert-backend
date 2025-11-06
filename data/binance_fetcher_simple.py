@@ -54,6 +54,7 @@ class BinanceFetcher:
             }
         
         self.exchange = ccxt.binance(config)
+        self.exchange.enable_demo_trading(self.testnet)
         await self.exchange.load_markets()
         logger.info(f"Binance Futures exchange initialized (testnet={self.testnet})")
     
@@ -63,13 +64,15 @@ class BinanceFetcher:
             await self.exchange.close()
             logger.info("Binance exchange connection closed")
     
-    async def get_all_usdt_pairs(self, min_volume_24h: float = 1000000, quote: str = 'USDT') -> List[str]:
+    async def get_all_usdt_pairs(self, min_volume_24h: float = 1000000, quote: str = 'USDT', 
+                                max_pairs: int = 100) -> List[str]:
         """
         Get all trading pairs with specified quote currency and minimum volume
         
         Args:
             min_volume_24h: Minimum 24h volume in quote currency
             quote: Quote currency (e.g., 'USDT', 'BUSD')
+            max_pairs: Maximum number of pairs to return (0 = unlimited)
         
         Returns:
             List of symbol strings for futures (e.g., ['BTCUSDT', 'ETHUSDT'])
@@ -103,8 +106,13 @@ class BinanceFetcher:
                         clean_symbol = symbol.replace('/', '')
                         valid_pairs.append(clean_symbol)
             
+            # Sort and limit pairs
+            valid_pairs = sorted(valid_pairs)
+            if max_pairs > 0:
+                valid_pairs = valid_pairs[:max_pairs]
+            
             logger.info(f"Found {len(valid_pairs)} futures pairs with {quote} quote and volume >= ${min_volume_24h:,.0f}")
-            return sorted(valid_pairs)
+            return valid_pairs
         
         except Exception as e:
             logger.error(f"Error fetching trading pairs: {e}")
@@ -112,7 +120,7 @@ class BinanceFetcher:
     
     async def fetch_historical(self, symbol: str, timeframe: str, limit: int = 500) -> pd.DataFrame:
         """
-        Fetch historical OHLCV data
+        Fetch historical OHLCV data (CLOSED CANDLES ONLY)
         
         Args:
             symbol: Trading pair in Binance Futures format (e.g., 'BTCUSDT')
@@ -121,6 +129,7 @@ class BinanceFetcher:
         
         Returns:
             DataFrame with columns: timestamp, open, high, low, close, volume
+            NOTE: Excludes the current/open candle
         """
         if not self.exchange:
             await self.initialize()
@@ -129,7 +138,8 @@ class BinanceFetcher:
             # Convert BTCUSDT to BTC/USDT:USDT for CCXT futures
             ccxt_symbol = self._convert_to_ccxt_format(symbol)
             
-            ohlcv = await self.exchange.fetch_ohlcv(ccxt_symbol, timeframe, limit=limit)
+            # Fetch limit+1 to account for removing open candle
+            ohlcv = await self.exchange.fetch_ohlcv(ccxt_symbol, timeframe, limit=limit+1)
             
             df = pd.DataFrame(
                 ohlcv,
@@ -140,7 +150,12 @@ class BinanceFetcher:
             df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
             df.set_index('timestamp', inplace=True)
             
-            logger.info(f"Fetched {len(df)} bars for {symbol} {timeframe}")
+            # ⬇️ CRITICAL: Loại bỏ open candle (candle cuối chưa đóng)
+            # CHoCH logic requires ONLY closed candles for 3-candle confirmation
+            if len(df) > 0:
+                df = df.iloc[:-1]  # Exclude last (open) candle
+            
+            logger.info(f"Fetched {len(df)} CLOSED bars for {symbol} {timeframe} (excluded open candle)")
             return df
         
         except Exception as e:
