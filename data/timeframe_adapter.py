@@ -58,7 +58,7 @@ class TimeframeAdapter:
         await self.fetcher.close()
     
     async def get_all_usdt_pairs(self, min_volume_24h: float = 100000, quote: str = 'USDT', 
-                                max_pairs: int = 100) -> list:
+                                max_pairs: int = 1000) -> list:
         """Get all trading pairs - passthrough method"""
         return await self.fetcher.get_all_usdt_pairs(min_volume_24h, quote, max_pairs)
     
