@@ -502,16 +502,28 @@ if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
     vol5 = getVolumeFromEnd(3)
     vol4 = getVolumeFromEnd(4)
     vol_choch = volume[1]  // Volume of CHoCH candle (previous bar)
+    chochBarIsPivotVol = (bar_index - 1 == lastEightBarIdx)
+    
+    if chochBarIsPivotVol and pCount() >= 9
+        // CHoCH bar is p8 → shift indices by 1
+        vol8 := getVolumeFromEnd(1)  // p9 → p8
+        vol7 := getVolumeFromEnd(2)  // p8 → p7
+        vol6 := getVolumeFromEnd(3)  // p7 → p6
+        vol5 := getVolumeFromEnd(4)  // p6 → p5
+        vol4 := getVolumeFromEnd(5)  // p5 → p4
+
+    
+    // label.new(bar_index, high,   str.tostring(volume[0]),style=label.style_label_down, textcolor=color.white,color=color.new(color.orange, 0), size=size.tiny)
 
     // Apply pattern group conditions with volume
     confirmUp = false
     confirmDown = false
-    
+
     if baseUp and not na(matchedGroup)
         // Downtrend → CHoCH Up
         priceCondition = false
         volumeCondition = false
-        
+
         if matchedGroup == "G1"
             // G1: Close_CF <= HIGH_5
             priceCondition := close <= saved_p5
@@ -519,12 +531,12 @@ if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
             // Volume condition G1: 678_ok AND 456_ok
             // 1. (Vol8 OR Vol6 OR Vol_CHoCH) là lớn nhất cụm 678
             max_678 = math.max(vol6, math.max(vol7, vol8))
-            vol_678_ok = (vol8 == max_678) or (vol6 == max_678) or (vol_choch == max_678)
+            vol_678_ok = (vol8 == max_678) or (vol6 == max_678) or (vol_choch >= max_678)
             
             // 2. (Vol4 OR Vol6) là lớn nhất cụm 456
             max_456 = math.max(vol4, math.max(vol5, vol6))
             vol_456_ok = (vol4 == max_456) or (vol6 == max_456)
-            
+
             volumeCondition := vol_678_ok and vol_456_ok
             confirmUp := priceCondition and volumeCondition
             
@@ -535,7 +547,7 @@ if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
             // Volume condition G2/G3:
             // (Vol4 OR Vol8 OR Vol_CHoCH) là lớn nhất cụm 45678
             max_45678 = math.max(vol4, math.max(vol5, math.max(vol6, math.max(vol7, vol8))))
-            volumeCondition := (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch == max_45678)
+            volumeCondition := (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch >= max_45678)
             confirmUp := priceCondition and volumeCondition
             
         else if matchedGroup == "G3"
@@ -545,7 +557,7 @@ if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
             // Volume condition G2/G3:
             // (Vol4 OR Vol8 OR Vol_CHoCH) là lớn nhất cụm 45678
             max_45678 = math.max(vol4, math.max(vol5, math.max(vol6, math.max(vol7, vol8))))
-            volumeCondition := (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch == max_45678)
+            volumeCondition := (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch >= max_45678)
             confirmUp := priceCondition and volumeCondition
 
         // Additional groups for Up confirmation (Downtrend -> CHoCH Up): G4', G5', G6'
@@ -563,7 +575,7 @@ if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
             // Volume condition G1: 678_ok AND 456_ok
             // 1. (Vol8 OR Vol6 OR Vol_CHoCH) là lớn nhất cụm 678
             max_678 = math.max(vol6, math.max(vol7, vol8))
-            vol_678_ok = (vol8 == max_678) or (vol6 == max_678) or (vol_choch == max_678)
+            vol_678_ok = (vol8 == max_678) or (vol6 == max_678) or (vol_choch >= max_678)
             
             // 2. (Vol4 OR Vol6) là lớn nhất cụm 456
             max_456 = math.max(vol4, math.max(vol5, vol6))
@@ -579,7 +591,7 @@ if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
             // Volume condition G2/G3:
             // (Vol4 OR Vol8 OR Vol_CHoCH) là lớn nhất cụm 45678
             max_45678 = math.max(vol4, math.max(vol5, math.max(vol6, math.max(vol7, vol8))))
-            volumeCondition := (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch == max_45678)
+            volumeCondition := (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch >= max_45678)
             confirmDown := priceCondition and volumeCondition
             
         else if matchedGroup == "G3"
@@ -589,9 +601,9 @@ if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
             // Volume condition G2/G3:
             // (Vol4 OR Vol8 OR Vol_CHoCH) là lớn nhất cụm 45678
             max_45678 = math.max(vol4, math.max(vol5, math.max(vol6, math.max(vol7, vol8))))
-            volumeCondition := (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch == max_45678)
+            volumeCondition := (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch >= max_45678)
             confirmDown := priceCondition and volumeCondition
-
+ 
         // New groups for Down confirmation (Uptrend -> CHoCH Down)
         // Groups G4/G5/G6 removed - no additional group-specific Down rules
 

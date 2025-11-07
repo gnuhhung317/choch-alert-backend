@@ -540,6 +540,18 @@ class ChochDetector:
             vol5 = df.loc[b5, 'volume']
             vol4 = df.loc[b4, 'volume']
             vol_choch = prev['volume']  # Volume of CHoCH candle
+            
+            # Check if CHoCH bar is pivot → shift volumes (matching Pine Script line 450-457)
+            choch_bar_is_pivot_vol = (prev_idx == b8)
+            if choch_bar_is_pivot_vol and state.pivot_count() >= 9:
+                # CHoCH bar is p8 → shift indices by 1
+                b9, _, _ = state.get_pivot_from_end(1)
+                vol8 = df.loc[state.get_pivot_from_end(1)[0], 'volume']  # p9 → p8
+                vol7 = df.loc[state.get_pivot_from_end(2)[0], 'volume']  # p8 → p7
+                vol6 = df.loc[state.get_pivot_from_end(3)[0], 'volume']  # p7 → p6
+                vol5 = df.loc[state.get_pivot_from_end(4)[0], 'volume']  # p6 → p5
+                vol4 = df.loc[state.get_pivot_from_end(5)[0], 'volume']  # p5 → p4
+                logger.debug(f"[Volume] CHoCH bar is p8, shifted volumes: vol4={vol4:.0f} vol5={vol5:.0f} vol6={vol6:.0f} vol7={vol7:.0f} vol8={vol8:.0f}")
         except KeyError:
             logger.warning(f"Cannot get volume data for pivots")
             return False, False
@@ -621,7 +633,7 @@ class ChochDetector:
                 # Volume condition G1: 678_ok AND 456_ok
                 # 1. (Vol8 OR Vol6 OR Vol_CHoCH) là lớn nhất cụm 678
                 max_678 = max(vol6, vol7, vol8)
-                vol_678_ok = (vol8 == max_678) or (vol6 == max_678) or (vol_choch == max_678)
+                vol_678_ok = (vol8 == max_678) or (vol6 == max_678) or (vol_choch >= max_678)
                 
                 # 2. (Vol4 OR Vol6) là lớn nhất cụm 456
                 max_456 = max(vol4, vol5, vol6)
@@ -640,7 +652,7 @@ class ChochDetector:
                 # Volume condition G2/G3:
                 # (Vol4 OR Vol8 OR Vol_CHoCH) là lớn nhất cụm 45678
                 max_45678 = max(vol4, vol5, vol6, vol7, vol8)
-                volume_condition = (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch == max_45678)
+                volume_condition = (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch >= max_45678)
                 confirm_up = price_condition and volume_condition
                 
                 if not volume_condition:
@@ -653,7 +665,7 @@ class ChochDetector:
                 # Volume condition G2/G3:
                 # (Vol4 OR Vol8 OR Vol_CHoCH) là lớn nhất cụm 45678
                 max_45678 = max(vol4, vol5, vol6, vol7, vol8)
-                volume_condition = (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch == max_45678)
+                volume_condition = (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch >= max_45678)
                 confirm_up = price_condition and volume_condition
                 
                 if not volume_condition:
@@ -671,7 +683,7 @@ class ChochDetector:
                 # Volume condition G1: 678_ok AND 456_ok
                 # 1. (Vol8 OR Vol6 OR Vol_CHoCH) là lớn nhất cụm 678
                 max_678 = max(vol6, vol7, vol8)
-                vol_678_ok = (vol8 == max_678) or (vol6 == max_678) or (vol_choch == max_678)
+                vol_678_ok = (vol8 == max_678) or (vol6 == max_678) or (vol_choch >= max_678)
                 
                 # 2. (Vol4 OR Vol6) là lớn nhất cụm 456
                 max_456 = max(vol4, vol5, vol6)
@@ -690,7 +702,7 @@ class ChochDetector:
                 # Volume condition G2/G3:
                 # (Vol4 OR Vol8 OR Vol_CHoCH) là lớn nhất cụm 45678
                 max_45678 = max(vol4, vol5, vol6, vol7, vol8)
-                volume_condition = (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch == max_45678)
+                volume_condition = (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch >= max_45678)
                 confirm_down = price_condition and volume_condition
                 
                 if not volume_condition:
@@ -703,7 +715,7 @@ class ChochDetector:
                 # Volume condition G2/G3:
                 # (Vol4 OR Vol8 OR Vol_CHoCH) là lớn nhất cụm 45678
                 max_45678 = max(vol4, vol5, vol6, vol7, vol8)
-                volume_condition = (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch == max_45678)
+                volume_condition = (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch >= max_45678)
                 confirm_down = price_condition and volume_condition
                 
                 if not volume_condition:
