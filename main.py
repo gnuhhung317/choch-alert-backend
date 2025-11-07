@@ -79,9 +79,13 @@ class ChochAlertSystem:
             allow_ph1=config.ALLOW_PH1,
             allow_ph2=config.ALLOW_PH2,
             allow_ph3=config.ALLOW_PH3,
+            allow_ph4=config.ALLOW_PH4,
+            allow_ph5=config.ALLOW_PH5,
             allow_pl1=config.ALLOW_PL1,
             allow_pl2=config.ALLOW_PL2,
-            allow_pl3=config.ALLOW_PL3
+            allow_pl3=config.ALLOW_PL3,
+            allow_pl4=config.ALLOW_PL4,
+            allow_pl5=config.ALLOW_PL5
         )
         
         self.telegram = TelegramSender(

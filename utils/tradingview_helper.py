@@ -49,6 +49,7 @@ def get_tradingview_interval(timeframe: str) -> str:
         '25m': '25',     # Aggregated timeframe
         '30m': '30',
         '40m': '40',     # Aggregated timeframe
+        '45m': '45',     # Aggregated timeframe
         '50m': '50',     # Aggregated timeframe
         '1h': '60',
         '2h': '120',

@@ -65,9 +65,13 @@ async def test_xrp_15m():
         allow_ph1=True,
         allow_ph2=True, 
         allow_ph3=True,
+        allow_ph4=True,
+        allow_ph5=True,
         allow_pl1=True,
         allow_pl2=True,
-        allow_pl3=True
+        allow_pl3=True,
+        allow_pl4=True,
+        allow_pl5=True
     )
     
     # Rebuild pivots

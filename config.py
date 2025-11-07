@@ -36,9 +36,13 @@ USE_VARIANT_FILTER = bool(int(os.getenv('USE_VARIANT_FILTER', '1')))
 ALLOW_PH1 = bool(int(os.getenv('ALLOW_PH1', '1')))
 ALLOW_PH2 = bool(int(os.getenv('ALLOW_PH2', '1')))
 ALLOW_PH3 = bool(int(os.getenv('ALLOW_PH3', '1')))
+ALLOW_PH4 = bool(int(os.getenv('ALLOW_PH4', '1')))
+ALLOW_PH5 = bool(int(os.getenv('ALLOW_PH5', '1')))
 ALLOW_PL1 = bool(int(os.getenv('ALLOW_PL1', '1')))
 ALLOW_PL2 = bool(int(os.getenv('ALLOW_PL2', '1')))
 ALLOW_PL3 = bool(int(os.getenv('ALLOW_PL3', '1')))
+ALLOW_PL4 = bool(int(os.getenv('ALLOW_PL4', '1')))
+ALLOW_PL5 = bool(int(os.getenv('ALLOW_PL5', '1')))
 
 # Flask Configuration
 FLASK_HOST = os.getenv('FLASK_HOST', '0.0.0.0')
