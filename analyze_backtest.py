@@ -481,7 +481,7 @@ def main():
     
     parser = argparse.ArgumentParser(description='Analyze backtest results')
     parser.add_argument('summary_file', nargs='?', 
-                       default='io/output/backtest_SUMMARY_20251105_211313.csv',
+                       default='backtest_SUMMARY_20251107_054957.csv',
                        help='Path to backtest summary CSV file')
     parser.add_argument('--top', type=int, default=10, 
                        help='Number of top/worst performers to show (default: 10)')

@@ -280,7 +280,6 @@ class ChochDetector:
         # This prevents fake pivot explosion in limited dataframes
         # When gap > 3, we skip fake pivot to keep count reasonable
         if gap > 3:
-            logger.debug(f"Gap too large ({gap} bars), skipping fake pivot")
             return False
         
         # Find extreme in gap using integer positions
@@ -311,11 +310,10 @@ class ChochDetector:
                 state.store_pivot(insert_bar, insert_price, insert_high)
                 state.last_pivot_bar = insert_bar
                 state.last_pivot_price = insert_price
-                logger.debug(f"Fake {'PH' if insert_high else 'PL'} inserted @ {insert_price:.6f} in gap of {gap} bars")
                 return True
         
         except (KeyError, IndexError) as e:
-            logger.debug(f"Error inserting fake pivot: {e}")
+            pass
         
         return False
     
@@ -330,11 +328,8 @@ class ChochDetector:
         Returns:
             Tuple of (last_eight_up, last_eight_down, pattern_group, pivot5, pivot6, last_eight_bar_idx, p2, p4)
         """
-        logger.info(f"[CHECK_EIGHT_PATTERN] CALLED with offset={pivot_offset}, pivot_count={state.pivot_count()}")
-        
         required_pivots = 8 + pivot_offset
         if state.pivot_count() < required_pivots:
-            logger.info(f"[CHECK_EIGHT_PATTERN] Not enough pivots: {state.pivot_count()} < {required_pivots}")
             return False, False, None, None, None, None, None, None
         
         # ALWAYS use latest 8 pivots for pattern check (matching Pine Script logic)
@@ -370,18 +365,9 @@ class ChochDetector:
             
             touch_retest = (up_struct and (lo7 < hi4)) or (down_struct and (hi7 > lo4))
             
-            logger.info(f"[CHECK_EIGHT_PATTERN] Touch retest check:")
-            logger.info(f"  b7={b7}, lo7={lo7:.6f}, hi7={hi7:.6f} (P7={p7:.6f})")
-            logger.info(f"  b4={b4}, hi4={hi4:.6f}, lo4={lo4:.6f} (P4={p4:.6f})")
-            logger.info(f"  up_struct={up_struct}, lo7 < hi4? {lo7:.6f} < {hi4:.6f} = {lo7 < hi4}")
-            logger.info(f"  down_struct={down_struct}, hi7 > lo4? {hi7:.6f} > {lo4:.6f} = {hi7 > lo4}")
-            logger.info(f"  → touch_retest={touch_retest}")
-            
             if not touch_retest:
-                logger.info(f"[CHECK_EIGHT_PATTERN] Touch retest FAILED - returning False")
                 return False, False, None, None, None, None, None, None
         except KeyError as e:
-            logger.info(f"[CHECK_EIGHT_PATTERN] Touch retest KeyError: {e} - returning False")
             return False, False, None, None, None, None, None, None
         
         # Check P8 is extreme
@@ -443,8 +429,7 @@ class ChochDetector:
                 elif g3_up_order:
                     pattern_group_result = "G3"
                     
-                logger.info(f"[8-PIVOT-{pattern_group_result}] ✓✓✓ VALID UPTREND PATTERN (offset={pivot_offset}): P1:{p1:.6f}(L) -> P2:{p2:.6f}(H) -> P3:{p3:.6f}(L) -> P4:{p4:.6f}(H) -> P5:{p5:.6f}(L) -> P6:{p6:.6f}(H) -> P7:{p7:.6f}(L-retest P4) -> P8:{p8:.6f}(H)")
-                logger.info(f"   Breakout UP: low[5]({lo5:.6f}) > high[2]({hi2:.6f}) = {lo5 > hi2}")
+                logger.info(f"[8-PIVOT-{pattern_group_result}] ✓ UPTREND P1:{p1:.6f}(L)→P2:{p2:.6f}(H)→P3:{p3:.6f}(L)→P4:{p4:.6f}(H)→P5:{p5:.6f}(L)→P6:{p6:.6f}(H)→P7:{p7:.6f}(L)→P8:{p8:.6f}(H)")
             else:
                 if g1_down_order:
                     pattern_group_result = "G1"
@@ -453,8 +438,7 @@ class ChochDetector:
                 elif g3_down_order:
                     pattern_group_result = "G3"
                     
-                logger.info(f"[8-PIVOT-{pattern_group_result}] ✓✓✓ VALID DOWNTREND PATTERN (offset={pivot_offset}): P1:{p1:.6f}(H) -> P2:{p2:.6f}(L) -> P3:{p3:.6f}(H) -> P4:{p4:.6f}(L) -> P5:{p5:.6f}(H) -> P6:{p6:.6f}(L) -> P7:{p7:.6f}(H-retest P4) -> P8:{p8:.6f}(L)")
-                logger.info(f"   Breakout DOWN: high[5]({hi5:.6f}) < low[2]({lo2:.6f}) = {hi5 < lo2}")
+                logger.info(f"[8-PIVOT-{pattern_group_result}] ✓ DOWNTREND P1:{p1:.6f}(H)→P2:{p2:.6f}(L)→P3:{p3:.6f}(H)→P4:{p4:.6f}(L)→P5:{p5:.6f}(H)→P6:{p6:.6f}(L)→P7:{p7:.6f}(H)→P8:{p8:.6f}(L)")
             
             return last_eight_up_result, last_eight_down_result, pattern_group_result, p5, p6, b8, p2, p4
         
@@ -551,7 +535,6 @@ class ChochDetector:
                 vol6 = df.loc[state.get_pivot_from_end(3)[0], 'volume']  # p7 → p6
                 vol5 = df.loc[state.get_pivot_from_end(4)[0], 'volume']  # p6 → p5
                 vol4 = df.loc[state.get_pivot_from_end(5)[0], 'volume']  # p5 → p4
-                logger.debug(f"[Volume] CHoCH bar is p8, shifted volumes: vol4={vol4:.0f} vol5={vol5:.0f} vol6={vol6:.0f} vol7={vol7:.0f} vol8={vol8:.0f}")
         except KeyError:
             logger.warning(f"Cannot get volume data for pivots")
             return False, False
@@ -581,9 +564,6 @@ class ChochDetector:
         effective_eight_bar_idx = state.last_eight_bar_idx
         
         if choch_bar_is_pivot and nine_ready:
-            logger.debug(f"[CHoCH] CHoCH bar {prev_idx} IS newest pivot (p8={state.last_eight_bar_idx})")
-            logger.debug(f"[CHoCH] Recalculating pattern from previous 8 pivots (offset=1)")
-            
             # Tính lại pattern từ 8 pivot trước đó (bỏ qua pivot mới nhất)
             pattern_result = self.check_eight_pattern(state, df, pivot_offset=1)
             
@@ -591,14 +571,7 @@ class ChochDetector:
                 effective_last_eight_up = pattern_result[0]
                 effective_last_eight_down = pattern_result[1]
                 effective_eight_bar_idx = pattern_result[5]  # b8 from offset pivots
-                
-                # NOTE: KHÔNG recalculate choch_up_bar/choch_down_bar như Pine Script
-                # Pine Script chỉ thay đổi effectiveLastEightUp/Down, không đổi điều kiện CHoCH
-                
-                logger.debug(f"[CHoCH] Effective pattern: up={effective_last_eight_up}, down={effective_last_eight_down}")
-                logger.debug(f"[CHoCH] Effective eight_bar_idx: {effective_eight_bar_idx} (was {state.last_eight_bar_idx})")
-            else:
-                logger.debug(f"[CHoCH] No valid pattern found with offset=1, using current state")
+            
         
         # Must be after eight pattern (use effective bar idx)
         is_after_eight = current_idx > effective_eight_bar_idx
@@ -642,9 +615,6 @@ class ChochDetector:
                 volume_condition = vol_678_ok and vol_456_ok
                 confirm_up = price_condition and volume_condition
                 
-                if not volume_condition:
-                    logger.debug(f"[G1] Volume condition failed - 678_ok:{vol_678_ok} 456_ok:{vol_456_ok}")
-                
             elif state.pattern_group == "G2":
                 # G2: Close_CF <= HIGH_7
                 price_condition = current['close'] <= p7
@@ -655,9 +625,6 @@ class ChochDetector:
                 volume_condition = (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch >= max_45678)
                 confirm_up = price_condition and volume_condition
                 
-                if not volume_condition:
-                    logger.debug(f"[G2] Volume condition failed - vol4={vol4:.0f} vol8={vol8:.0f} vol_choch={vol_choch:.0f} max={max_45678:.0f}")
-                
             elif state.pattern_group == "G3":
                 # G3: Close_CF <= HIGH_5
                 price_condition = current['close'] <= p5
@@ -667,9 +634,6 @@ class ChochDetector:
                 max_45678 = max(vol4, vol5, vol6, vol7, vol8)
                 volume_condition = (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch >= max_45678)
                 confirm_up = price_condition and volume_condition
-                
-                if not volume_condition:
-                    logger.debug(f"[G3] Volume condition failed - vol4={vol4:.0f} vol8={vol8:.0f} vol_choch={vol_choch:.0f} max={max_45678:.0f}")
         
         if base_down and state.pattern_group:
             # Uptrend → CHoCH Down (base_down đã bao gồm confirm_down_basic)
@@ -688,12 +652,9 @@ class ChochDetector:
                 # 2. (Vol4 OR Vol6) là lớn nhất cụm 456
                 max_456 = max(vol4, vol5, vol6)
                 vol_456_ok = (vol4 == max_456) or (vol6 == max_456)
-                
+
                 volume_condition = vol_678_ok and vol_456_ok
                 confirm_down = price_condition and volume_condition
-                
-                if not volume_condition:
-                    logger.debug(f"[G1] Volume condition failed - 678_ok:{vol_678_ok} 456_ok:{vol_456_ok}")
                 
             elif state.pattern_group == "G2":
                 # G2: Close_CF >= LOW_7
@@ -705,9 +666,6 @@ class ChochDetector:
                 volume_condition = (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch >= max_45678)
                 confirm_down = price_condition and volume_condition
                 
-                if not volume_condition:
-                    logger.debug(f"[G2] Volume condition failed - vol4={vol4:.0f} vol8={vol8:.0f} vol_choch={vol_choch:.0f} max={max_45678:.0f}")
-                
             elif state.pattern_group == "G3":
                 # G3: Close_CF >= LOW_5
                 price_condition = current['close'] >= p5
@@ -717,9 +675,6 @@ class ChochDetector:
                 max_45678 = max(vol4, vol5, vol6, vol7, vol8)
                 volume_condition = (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch >= max_45678)
                 confirm_down = price_condition and volume_condition
-                
-                if not volume_condition:
-                    logger.debug(f"[G3] Volume condition failed - vol4={vol4:.0f} vol8={vol8:.0f} vol_choch={vol_choch:.0f} max={max_45678:.0f}")
 
         # Fire signal nếu có confirmation và chưa lock
         if not state.choch_locked and (confirm_up or confirm_down):
@@ -733,32 +688,10 @@ class ChochDetector:
             # Log pattern group condition with volume info
             if confirm_up:
                 ref_pivot = p7 if state.pattern_group == "G2" else p5
-                if state.pattern_group == "G1":
-                    logger.info(f"[CHoCH-{state.pattern_group}] ✅ CONFIRMED UP @ {prev['close']:.6f} (Close_CF {current['close']:.6f} <= P5 {ref_pivot:.6f})")
-                    logger.info(f"   Volume 678: vol6={vol6:.0f} vol7={vol7:.0f} vol8={vol8:.0f} vol_choch={vol_choch:.0f}")
-                    logger.info(f"   Volume 456: vol4={vol4:.0f} vol5={vol5:.0f} vol6={vol6:.0f}")
-                elif state.pattern_group == "G2":
-                    logger.info(f"[CHoCH-{state.pattern_group}] ✅ CONFIRMED UP @ {prev['close']:.6f} (Close_CF {current['close']:.6f} <= P7 {ref_pivot:.6f})")
-                    logger.info(f"   Volume 45678: vol4={vol4:.0f} vol5={vol5:.0f} vol6={vol6:.0f} vol7={vol7:.0f} vol8={vol8:.0f} vol_choch={vol_choch:.0f}")
-                else:  # G3
-                    logger.info(f"[CHoCH-{state.pattern_group}] ✅ CONFIRMED UP @ {prev['close']:.6f} (Close_CF {current['close']:.6f} <= P5 {ref_pivot:.6f})")
-                    logger.info(f"   Volume 45678: vol4={vol4:.0f} vol5={vol5:.0f} vol6={vol6:.0f} vol7={vol7:.0f} vol8={vol8:.0f} vol_choch={vol_choch:.0f}")
+                logger.info(f"[CHoCH-{state.pattern_group}] ✅ UP @ {prev['close']:.6f} (CF:{current['close']:.6f}<=P:{ref_pivot:.6f})")
             else:
                 ref_pivot = p7 if state.pattern_group == "G2" else p5
-                if state.pattern_group == "G1":
-                    logger.info(f"[CHoCH-{state.pattern_group}] ✅ CONFIRMED DOWN @ {prev['close']:.6f} (Close_CF {current['close']:.6f} >= P5 {ref_pivot:.6f})")
-                    logger.info(f"   Volume 678: vol6={vol6:.0f} vol7={vol7:.0f} vol8={vol8:.0f} vol_choch={vol_choch:.0f}")
-                    logger.info(f"   Volume 456: vol4={vol4:.0f} vol5={vol5:.0f} vol6={vol6:.0f}")
-                elif state.pattern_group == "G2":
-                    logger.info(f"[CHoCH-{state.pattern_group}] ✅ CONFIRMED DOWN @ {prev['close']:.6f} (Close_CF {current['close']:.6f} >= P7 {ref_pivot:.6f})")
-                    logger.info(f"   Volume 45678: vol4={vol4:.0f} vol5={vol5:.0f} vol6={vol6:.0f} vol7={vol7:.0f} vol8={vol8:.0f} vol_choch={vol_choch:.0f}")
-                else:  # G3
-                    logger.info(f"[CHoCH-{state.pattern_group}] ✅ CONFIRMED DOWN @ {prev['close']:.6f} (Close_CF {current['close']:.6f} >= P5 {ref_pivot:.6f})")
-                    logger.info(f"   Volume 45678: vol4={vol4:.0f} vol5={vol5:.0f} vol6={vol6:.0f} vol7={vol7:.0f} vol8={vol8:.0f} vol_choch={vol_choch:.0f}")
-            
-            logger.info(f"   CHoCH bar: {prev_idx} (O:{prev['open']}, H:{prev['high']}, L:{prev['low']}, C:{prev['close']}) [CLOSED]")
-            logger.info(f"   Pre-CHoCH: {pre_prev_idx} (O:{pre_prev['open']}, H:{pre_prev['high']}, L:{pre_prev['low']}, C:{pre_prev['close']}) [CLOSED]")
-            logger.info(f"   Confirm bar: {current_idx} (O:{current['open']}, H:{current['high']}, L:{current['low']}, C:{current['close']}) [CLOSED]")
+                logger.info(f"[CHoCH-{state.pattern_group}] ✅ DOWN @ {prev['close']:.6f} (CF:{current['close']:.6f}>=P:{ref_pivot:.6f})")
             
             return fire_choch_up, fire_choch_down
 
@@ -790,8 +723,6 @@ class ChochDetector:
         # Detect pivots CHỈ KHI match variant (giống Pine Script - không detect rồi mới filter)
         pivots = self.detect_pivots_with_variants(df)
         
-        logger.info(f"[rebuild_pivots] {len(df)} bars → {len(pivots)} variant-matched pivots (NO pure pivot detection)")
-        
         # Process ALL variant-matched pivots
         for check_idx, pivot_price, is_high, variant in pivots:
             pivot_idx = df.index[check_idx]
@@ -814,16 +745,12 @@ class ChochDetector:
                         # For PL: keep lower price
                         if is_high and pivot_price > last_price:
                             should_replace_last = True
-                            logger.debug(f"[CONSECUTIVE] Replace last PH {last_price:.6f} with new stronger PH {pivot_price:.6f}")
                         elif is_high and pivot_price <= last_price:
                             should_skip_new = True
-                            logger.debug(f"[CONSECUTIVE] Skip weaker new PH {pivot_price:.6f}, keep last PH {last_price:.6f}")
                         elif not is_high and pivot_price < last_price:
                             should_replace_last = True
-                            logger.debug(f"[CONSECUTIVE] Replace last PL {last_price:.6f} with new stronger PL {pivot_price:.6f}")
                         elif not is_high and pivot_price >= last_price:
                             should_skip_new = True
-                            logger.debug(f"[CONSECUTIVE] Skip weaker new PL {pivot_price:.6f}, keep last PL {last_price:.6f}")
                     elif gap > 0:
                         # Insert fake pivot between them
                         self.insert_fake_pivot(state, df, last_bar, last_price, last_high, 
@@ -848,7 +775,6 @@ class ChochDetector:
         
         # Check for 8-pattern
         pattern_result = self.check_eight_pattern(state, df)
-        logger.debug(f"[rebuild_pivots] pattern_result type: {type(pattern_result)}, value: {pattern_result}")
         if pattern_result[0] or pattern_result[1]:  # If any pattern matched
             # Update state with results
             state.last_eight_up = pattern_result[0]
@@ -860,10 +786,7 @@ class ChochDetector:
             # p2_price stored as pattern_result[6] but not saved to state (used in check_choch)
             state.pivot4 = pattern_result[7]  # Store pivot4 for CHoCH condition
         
-        pivot_after = state.pivot_count()
-        logger.info(f"[rebuild_pivots] Final: {pivot_after} total pivots (with fakes)")
-        
-        return pivot_after
+        return state.pivot_count()
     
     def process_new_bar(self, timeframe: str, df: pd.DataFrame) -> Dict:
         """
@@ -897,12 +820,10 @@ class ChochDetector:
         }
         
         if len(df) < 3:
-            logger.debug(f"[{timeframe}] Not enough CLOSED bars for CHoCH confirmation (need 3, have {len(df)})")
             return result
         
         # ✅ Nến confirmation là nến cuối cùng (ĐÃ ĐÓNG - vì open candle đã được loại bỏ)
         current_idx = df.index[-1]  # Latest CLOSED bar (confirmation candle)
-        logger.debug(f"[{timeframe}] Checking CHoCH confirmation on CLOSED bar: {current_idx}")
         
         fire_up, fire_down = self.check_choch(df, state, current_idx)
         

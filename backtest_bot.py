@@ -2,15 +2,15 @@
 CHoCH Backtest Bot - Testing trading strategy with historical data
 
 Strategy for LONG:
-- Entry 1 (en1): High pivot 6
-- Entry 2 (en2): Close CHoCH candle
+- Entry 1 (en1): Close CHoCH candle (conservative - closer to TP)
+- Entry 2 (en2): High pivot 6 (aggressive - further from TP)
 - Take Profit (TP): High pivot 5
 - Stop Loss (SL): Low pivot 8
 - Cancel all orders if TP is hit
 
 Strategy for SHORT:
-- Entry 1 (en1): Low pivot 6
-- Entry 2 (en2): Close CHoCH candle
+- Entry 1 (en1): Close CHoCH candle (conservative - closer to TP)
+- Entry 2 (en2): Low pivot 6 (aggressive - further from TP)
 - Take Profit (TP): Low pivot 5
 - Stop Loss (SL): High pivot 8
 - Cancel all orders if TP is hit
@@ -345,8 +345,8 @@ class BacktestEngine:
         # Setup new trade
         if direction == 'Long':
             # LONG strategy
-            en1 = p6  # High pivot 6 (should be high)
-            en2 = choch_price  # Close CHoCH
+            en1 = choch_price  # Close CHoCH (conservative - closer to TP)
+            en2 = p6  # High pivot 6 (aggressive - further from TP)
             tp = p5   # High pivot 5 (should be high)
             sl = p8   # Low pivot 8 (should be low)
             
@@ -359,15 +359,15 @@ class BacktestEngine:
                 logger.warning(f"Pivot 8 is not a low! Using value anyway: {p8}")
             
             logger.info(f"[LONG SETUP]")
-            logger.info(f"  Entry 1: {en1:.8f} (High P6)")
-            logger.info(f"  Entry 2: {en2:.8f} (CHoCH Close)")
+            logger.info(f"  Entry 1: {en1:.8f} (CHoCH Close - conservative)")
+            logger.info(f"  Entry 2: {en2:.8f} (High P6 - aggressive)")
             logger.info(f"  TP: {tp:.8f} (High P5)")
             logger.info(f"  SL: {sl:.8f} (Low P8)")
             
         else:  # Short
             # SHORT strategy
-            en1 = p6  # Low pivot 6 (should be low)
-            en2 = choch_price  # Close CHoCH
+            en1 = choch_price  # Close CHoCH (conservative - closer to TP)
+            en2 = p6  # Low pivot 6 (aggressive - further from TP)
             tp = p5   # Low pivot 5 (should be low)
             sl = p8   # High pivot 8 (should be high)
             
@@ -380,8 +380,8 @@ class BacktestEngine:
                 logger.warning(f"Pivot 8 is not a high! Using value anyway: {p8}")
             
             logger.info(f"[SHORT SETUP]")
-            logger.info(f"  Entry 1: {en1:.8f} (Low P6)")
-            logger.info(f"  Entry 2: {en2:.8f} (CHoCH Close)")
+            logger.info(f"  Entry 1: {en1:.8f} (CHoCH Close - conservative)")
+            logger.info(f"  Entry 2: {en2:.8f} (Low P6 - aggressive)")
             logger.info(f"  TP: {tp:.8f} (Low P5)")
             logger.info(f"  SL: {sl:.8f} (High P8)")
         
