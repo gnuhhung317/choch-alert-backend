@@ -23,9 +23,17 @@ from visualization.chart_plotter import ChochChartPlotter
 from utils.tradingview_helper import add_tradingview_link_to_alert
 from utils.timeframe_scheduler import TimeframeScheduler
 
+# Trading bot components (optional - only used if ENABLE_TRADING=1)
+if config.ENABLE_TRADING:
+    from trading.signal_bus import get_signal_bus
+    from trading.signal_converter import create_signal_from_choch
+    from trading.exchange_adapter import BinanceFuturesAdapter  # ⬅️ Use concrete implementation
+    from trading.position_manager import PositionManager
+    from trading.trading_bot import TradingBot
+
 # Setup logging with UTF-8 encoding to handle emoji characters
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.WARNING,  # ⬅️ Giảm log: chỉ WARNING và ERROR
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout),
@@ -33,7 +41,10 @@ logging.basicConfig(
     ]
 )
 
-# Configure stdout handler to use UTF-8 encoding on Windows
+# Set main logger to INFO to see important messages
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
 for handler in logging.root.handlers:
     if isinstance(handler, logging.StreamHandler) and handler.stream == sys.stdout:
         try:
@@ -44,8 +55,6 @@ for handler in logging.root.handlers:
                 handler.stream = sys.stdout
         except Exception:
             pass
-
-logger = logging.getLogger(__name__)
 
 
 class ChochAlertSystem:
@@ -95,6 +104,22 @@ class ChochAlertSystem:
         
         # Initialize chart plotter
         self.plotter = ChochChartPlotter(output_dir="charts")
+        
+        # Initialize trading bot if enabled
+        self.trading_bot = None
+        self.signal_bus = None
+        self.exchange_adapter = None  # Store for later initialization
+        
+        if config.ENABLE_TRADING:
+            logger.info("[*] Trading bot will be initialized in realtime mode...")
+            # Store config for later async initialization
+            self._trading_config = {
+                'api_key': config.BINANCE_API_KEY,
+                'secret': config.BINANCE_SECRET,
+                'demo_mode': config.DEMO_TRADING,
+                'position_size': config.POSITION_SIZE,
+                'leverage': config.LEVERAGE
+            }
         
         # State tracking
         self.running = False
@@ -220,6 +245,26 @@ class ChochAlertSystem:
                 
                 # Broadcast to web clients
                 broadcast_alert(alert_data)
+                
+                # ⬇️ PUBLISH SIGNAL TO TRADING BOT (if enabled)
+                if self.signal_bus and self.trading_bot:
+                    try:
+                        signal = create_signal_from_choch(
+                            symbol=symbol,
+                            timeframe=timeframe,
+                            result=result,
+                            detector=self.detector  # ⬅️ Pass detector instance
+                        )
+                        
+                        if signal:
+                            # Publish signal to signal bus (await to catch errors)
+                            await self.signal_bus.publish(signal)
+                            logger.warning(f"[TRADING] 📡 Signal published: {signal.direction} @ ${signal.entry1_price:.4f}")
+                        else:
+                            logger.warning(f"[TRADING] Failed to create signal from CHoCH result")
+                        
+                    except Exception as e:
+                        logger.error(f"[TRADING] Failed to publish signal: {e}", exc_info=True)
                 
                 return True  # Signal detected
             else:
@@ -398,6 +443,55 @@ class ChochAlertSystem:
         # Initialize fetcher
         await self.fetcher.initialize()
         
+        # Initialize trading bot if enabled
+        if hasattr(self, '_trading_config'):
+            logger.info("[*] Initializing trading bot...")
+            try:
+                # Initialize signal bus
+                self.signal_bus = get_signal_bus()
+                
+                # Initialize exchange adapter
+                self.exchange_adapter = BinanceFuturesAdapter(
+                    api_key=self._trading_config['api_key'],
+                    secret=self._trading_config['secret'],
+                    demo_mode=self._trading_config['demo_mode']
+                )
+                
+                # Initialize exchange connection (async)
+                await self.exchange_adapter.initialize()
+                
+                # Initialize position manager
+                position_manager = PositionManager(
+                    exchange=self.exchange_adapter,
+                    enable_trading=True  # Enable real trading
+                )
+                
+                # Override default position size and leverage if configured
+                if self._trading_config['position_size']:
+                    position_manager.position_size = self._trading_config['position_size']
+                    position_manager.margin = position_manager.position_size / self._trading_config['leverage']
+                if self._trading_config['leverage']:
+                    position_manager.leverage = self._trading_config['leverage']
+                
+                # Initialize trading bot
+                self.trading_bot = TradingBot(
+                    position_manager=position_manager,
+                    enable_trading=True  # Enable real trading
+                )
+                
+                # Start bot (subscribes to signal bus automatically)
+                self.trading_bot.start()
+                
+                mode = "DEMO (Testnet)" if self._trading_config['demo_mode'] else "LIVE (Mainnet)"
+                logger.info(f"[OK] Trading bot initialized in {mode} mode")
+                
+            except Exception as e:
+                logger.error(f"Failed to initialize trading bot: {e}", exc_info=True)
+                logger.error("Continuing without trading bot...")
+                self.trading_bot = None
+                self.signal_bus = None
+                self.exchange_adapter = None
+        
         logger.info(f"Timeframes: {', '.join(config.TIMEFRAMES)}")
         logger.info(f"Pivot Settings: Left={config.PIVOT_LEFT}, Right={config.PIVOT_RIGHT}")
         logger.info(f"Historical Bars: {config.HISTORICAL_LIMIT}")
@@ -479,7 +573,6 @@ class ChochAlertSystem:
                 for timeframe in scannable_timeframes:
                     try:
                         # ⬇️ FETCH CLOSED BARS ONLY (open candle excluded)
-                        logger.info(f"[{symbol}][{timeframe}] Fetching 50 CLOSED bars...")
                         df = await self.fetcher.fetch_historical(
                             symbol=symbol,
                             timeframe=timeframe,
@@ -492,11 +585,8 @@ class ChochAlertSystem:
                         
                         key = f"{symbol}_{timeframe}"
                         
-                        # ⬇️ ALWAYS REBUILD PIVOTS from CLOSED bars (ensures accuracy)
-                        # Rebuilding từ 50 bars đảm bảo tính chính xác cao hơn incremental update
-                        logger.info(f"[{symbol}][{timeframe}] Rebuilding pivots from {len(df)} CLOSED bars...")
+                        # ⬇️ ALWAYS REBUILD PIVOTS from CLOSED bars
                         pivot_count = self.detector.rebuild_pivots(key, df)
-                        logger.info(f"[{symbol}][{timeframe}] ✓ Built {pivot_count} pivots from CLOSED candles")
                         
                         # ⬇️ CHECK CHoCH với 3-CANDLE CONFIRMATION LOGIC
                         # Cần ít nhất 3 nến: pre-CHoCH, CHoCH, confirmation
@@ -583,6 +673,24 @@ class ChochAlertSystem:
         # Cancel all tasks
         for task in self.tasks:
             task.cancel()
+        
+        # Stop trading bot if running
+        if self.trading_bot:
+            try:
+                logger.info("[*] Stopping trading bot...")
+                self.trading_bot.stop()  # ⬅️ Synchronous method, not async
+                logger.info("[OK] Trading bot stopped")
+            except Exception as e:
+                logger.warning(f"Error stopping trading bot: {e}")
+        
+        # Close exchange adapter
+        if self.exchange_adapter:
+            try:
+                logger.info("[*] Closing exchange connection...")
+                await self.exchange_adapter.close()
+                logger.info("[OK] Exchange connection closed")
+            except Exception as e:
+                logger.warning(f"Error closing exchange: {e}")
         
         # Close fetcher
         try:

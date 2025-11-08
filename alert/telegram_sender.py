@@ -107,7 +107,44 @@ class TelegramSender:
         except Exception as e:
             logger.error(f"❌ Unexpected error sending Telegram alert: {e}")
             return False
-    
+    def send_message(self, message: str, parse_mode: Optional[str] = 'Markdown') -> bool:
+        """
+        Send a custom message to Telegram
+        
+        Args:
+            message: Message text to send
+            parse_mode: Optional parse mode (e.g., 'Markdown', 'HTML')
+        
+        Returns:
+            True if sent successfully, False otherwise
+        """
+        try:
+            payload = {
+                'chat_id': self.chat_id,
+                'text': message,
+                'parse_mode': parse_mode,
+                'disable_web_page_preview': False
+            }
+            
+            response = requests.post(
+                f"{self.api_url}/sendMessage",
+                json=payload,
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                logger.info("✅ Message sent to Telegram")
+                return True
+            else:
+                logger.error(f"❌ Failed to send Telegram message: {response.status_code} - {response.text}")
+                return False
+        
+        except requests.RequestException as e:
+            logger.error(f"❌ Telegram API request failed: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"❌ Unexpected error sending Telegram message: {e}")
+            return False
     def test_connection(self) -> bool:
         """
         Test Telegram bot connection

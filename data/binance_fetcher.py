@@ -44,17 +44,17 @@ class BinanceFetcher:
             config['apiKey'] = self.api_key
             config['secret'] = self.secret
         
+        self.exchange = ccxt.binance(config) #TODO
+                # Enable testnet/sandbox mode if requested
+        self.exchange.enable_demo_trading(True)
         if self.testnet:
-            config['options']['defaultType'] = 'future'
-            config['urls'] = {
-                'api': {
-                    'public': 'https://testnet.binancefuture.com',
-                    'private': 'https://testnet.binancefuture.com',
-                }
-            }
+            self.exchange.enable_demo_trading(True)
+            logger.info("🧪 Testnet mode enabled for data fetcher")
         
-        self.exchange = ccxt.binance(config)
+        # Load markets first
         await self.exchange.load_markets()
+        
+
         logger.info(f"Binance Futures exchange initialized (testnet={self.testnet})")
     
     async def close(self):

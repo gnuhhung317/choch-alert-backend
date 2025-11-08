@@ -95,7 +95,7 @@ class TimeframeAdapter:
             # To get N aggregated candles, we need N × multiplier base candles
             base_limit = limit * multiplier
             
-            logger.info(f"[TimeframeAdapter] {symbol} {timeframe}: Fetching {base_limit} {base_tf} candles (×{multiplier}) to produce {limit} aggregated candles")
+            logger.debug(f"[TimeframeAdapter] {symbol} {timeframe}: Fetching {base_limit} {base_tf} candles (×{multiplier}) to produce {limit} aggregated candles")
             
             # Fetch base timeframe data
             df_base = await self.fetcher.fetch_historical(symbol, base_tf, base_limit)
@@ -131,7 +131,7 @@ class TimeframeAdapter:
                 df_aggregated = df_aggregated.tail(limit)
                 logger.debug(f"[TimeframeAdapter] Trimmed to {limit} candles (had {len(df_aggregated)})")
             
-            logger.info(f"[TimeframeAdapter] ✓ {symbol} {timeframe}: Aggregated {len(df_base)} {base_tf} → {len(df_aggregated)} {timeframe} candles")
+            logger.debug(f"[TimeframeAdapter] ✓ {symbol} {timeframe}: Aggregated {len(df_base)} {base_tf} → {len(df_aggregated)} {timeframe} candles")
             
             return df_aggregated
         
