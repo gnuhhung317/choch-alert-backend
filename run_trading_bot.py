@@ -1,10 +1,30 @@
 """
-Trading Bot Runner - Production/Demo Mode
+Trading Bot Runner - Production/Demo Mode with Dual Exchange Setup
 Integrates CHoCH scanner with automated trading
+
+DUAL EXCHANGE ARCHITECTURE:
+==========================
+This bot uses TWO separate exchange instances for different purposes:
+
+1. REALTIME DATA FETCHER (BinanceFetcher)
+   - Purpose: Fetch market data (OHLCV, prices, volume)
+   - Source: ALWAYS production/realtime Binance
+   - Why: CHoCH signals need real market movements to be accurate
+   - Note: Even in demo mode, we analyze real market data
+
+2. DEMO/LIVE TRADING EXCHANGE (BinanceFuturesAdapter)
+   - Purpose: Execute orders & manage positions
+   - Source: Testnet (demo) OR Production (live) based on config
+   - Why: Practice strategies without risking real money
+   - Note: Uses demo funds, but analyzes real market
+
+Example Scenarios:
+- DEMO_TRADING=1: Analyze real market → Execute on testnet (safe)
+- DEMO_TRADING=0: Analyze real market → Execute on production (risky)
 
 Configuration via .env:
 - ENABLE_TRADING=1    # Enable real trading (0=simulation only)
-- DEMO_TRADING=1      # Use testnet (1=testnet, 0=live)
+- DEMO_TRADING=1      # Use testnet for orders (1=testnet, 0=live)
 - POSITION_SIZE=100   # Position size in USDT
 - LEVERAGE=20         # Leverage multiplier
 
@@ -106,27 +126,58 @@ async def main():
     
     timeframes = config.TIMEFRAMES
     
-    exchange = None
-    fetcher = None
+    demo_exchange = None  # For position management (demo/testnet)
+    fetcher = None  # For market data (realtime)
     monitoring_task = None
     
     try:
         # Initialize components
         logger.info("Initializing components...")
+        logger.info("\n" + "="*80)
+        logger.info("EXCHANGE INSTANCES - DUAL SETUP")
+        logger.info("="*80)
+        logger.info("📊 Instance 1: REALTIME DATA FETCHER")
+        logger.info("   Purpose: Fetch market data (OHLCV, prices)")
+        logger.info("   Source: ALWAYS production (realtime prices)")
+        logger.info("   Reason: CHoCH signals need real market data")
+        logger.info("")
+        logger.info("🎮 Instance 2: DEMO/LIVE EXCHANGE")
+        logger.info("   Purpose: Execute orders & manage positions")
+        logger.info(f"   Source: {'TESTNET (demo)' if config.DEMO_TRADING else 'PRODUCTION (live)'}")
+        logger.info("   Reason: Test strategies without real money risk")
+        logger.info("="*80 + "\n")
         
-        # Exchange
-        exchange = BinanceFuturesAdapter(
+        # 1. DEMO/LIVE EXCHANGE - For position management (orders/positions)
+        demo_exchange = BinanceFuturesAdapter(
             api_key=config.BINANCE_API_KEY,
             secret=config.BINANCE_SECRET,
-            demo_mode=config.DEMO_TRADING
+            demo_mode=config.DEMO_TRADING  # True=testnet, False=production
         )
         
         if config.ENABLE_TRADING:
-            await exchange.initialize()
+            await demo_exchange.initialize()
+            logger.info(f"✓ Trading Exchange: {'TESTNET' if config.DEMO_TRADING else 'LIVE'} (position management)")
+        else:
+            logger.info("✓ Trading Exchange: SIMULATION (no real orders)")
         
-        # Position manager
+        # 2. REALTIME FETCHER - For market data (typically production)
+        # This is INDEPENDENT from trading mode - usually use real market data
+        # Even in demo trading, we want to analyze real market movements
+        # Can be overridden via USE_REALTIME_DATA=0 for testing
+        base_fetcher = BinanceFetcher(
+            api_key=config.BINANCE_API_KEY,
+            secret=config.BINANCE_SECRET,
+            use_realtime=config.USE_REALTIME_DATA  # Default: True (production data)
+        )
+        fetcher = TimeframeAdapter(base_fetcher)
+        await fetcher.initialize()
+        data_source = "REALTIME PRODUCTION" if config.USE_REALTIME_DATA else "TESTNET"
+        logger.info(f"✓ Market Data Fetcher: {data_source} (market analysis)")
+        logger.info("="*80 + "\n")
+        
+        # Position manager (uses demo exchange for orders)
         position_manager = PositionManager(
-            exchange=exchange,
+            exchange=demo_exchange,
             enable_trading=config.ENABLE_TRADING
         )
         position_manager.position_size = config.POSITION_SIZE
@@ -144,15 +195,6 @@ async def main():
         trading_bot.start()
         signal_bus.subscribe(telegram_alert_handler)
         logger.info(f"✓ Signal bus: {signal_bus.get_subscriber_count()} subscribers\n")
-        
-        # Scanner
-        base_fetcher = BinanceFetcher(
-            api_key=config.BINANCE_API_KEY,
-            secret=config.BINANCE_SECRET,
-            testnet=config.DEMO_TRADING
-        )
-        fetcher = TimeframeAdapter(base_fetcher)
-        await fetcher.initialize()
         
         detector = ChochDetector(
             left=config.PIVOT_LEFT,
@@ -259,8 +301,8 @@ async def main():
         if fetcher:
             await fetcher.close()
         
-        if exchange and config.ENABLE_TRADING:
-            await exchange.close()
+        if demo_exchange and config.ENABLE_TRADING:
+            await demo_exchange.close()
         
         logger.info("✓ Shutdown complete\n")
 

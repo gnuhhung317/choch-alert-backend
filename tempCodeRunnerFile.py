@@ -83,10 +83,9 @@ class ChochAlertSystem:
         # ==========================================
         
         # Initialize REALTIME data fetcher (for market analysis)
-        # Uses main API keys for production market data
         base_fetcher = BinanceFetcher(
-            api_key=config.BINANCE_API_KEY,      # Main production keys
-            secret=config.BINANCE_SECRET,        # Main production keys
+            api_key=config.BINANCE_API_KEY,
+            secret=config.BINANCE_SECRET,
             use_realtime=config.USE_REALTIME_DATA  # Default: True (production market data)
         )
         
@@ -129,10 +128,9 @@ class ChochAlertSystem:
             logger.info("[*] Trading bot will be initialized in realtime mode...")
             logger.info(f"[*] Trading Mode: {'DEMO (Testnet)' if config.DEMO_TRADING else 'LIVE (Production)'}")
             # Store config for later async initialization
-            # Use separate API keys for trading exchange
             self._trading_config = {
-                'api_key': config.BINANCE_API_KEY_DEMO,  # Separate keys for trading
-                'secret': config.BINANCE_SECRET_DEMO,    # Separate keys for trading
+                'api_key': config.BINANCE_API_KEY,
+                'secret': config.BINANCE_SECRET,
                 'demo_mode': config.DEMO_TRADING,  # True=testnet, False=production
                 'position_size': config.POSITION_SIZE,
                 'leverage': config.LEVERAGE
@@ -467,17 +465,11 @@ class ChochAlertSystem:
             logger.info("="*80)
             logger.info("📊 Exchange 1: REALTIME DATA")
             logger.info(f"   Already initialized: {self.data_mode} market data")
-            logger.info(f"   API Key: {config.BINANCE_API_KEY[:8]}...{config.BINANCE_API_KEY[-4:] if config.BINANCE_API_KEY else 'NOT SET'}")
             logger.info(f"   Purpose: CHoCH signal detection")
             logger.info("")
             logger.info("🎮 Exchange 2: DEMO/LIVE TRADING")
             logger.info(f"   Mode: {'TESTNET (demo orders)' if self._trading_config['demo_mode'] else 'PRODUCTION (real orders)'}")
-            logger.info(f"   API Key: {self._trading_config['api_key'][:8]}...{self._trading_config['api_key'][-4:] if self._trading_config['api_key'] else 'NOT SET'}")
             logger.info(f"   Purpose: Position management & order execution")
-            logger.info("")
-            if config.BINANCE_API_KEY == config.BINANCE_API_KEY_DEMO:
-                logger.warning("⚠️  WARNING: Using same API keys for both exchanges!")
-                logger.warning("   Consider using separate keys: BINANCE_API_KEY_DEMO")
             logger.info("="*80 + "\n")
             
             try:
@@ -765,14 +757,3 @@ if __name__ == '__main__':
         # Check Python version
         if sys.version_info < (3, 10):
             logger.warning("[WARNING] Python 3.10+ recommended. Current version: {}.{}".format(
-                sys.version_info.major, sys.version_info.minor
-            ))
-        
-        # Run the system
-        asyncio.run(main())
-    
-    except KeyboardInterrupt:
-        logger.info("\n[EXIT] Goodbye!")
-    except Exception as e:
-        logger.error(f"Fatal error: {e}", exc_info=True)
-        sys.exit(1)

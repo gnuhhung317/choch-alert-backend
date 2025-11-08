@@ -13,25 +13,26 @@ logger = logging.getLogger(__name__)
 class BinanceFetcher:
     """Simple Binance futures data fetcher"""
     
-    def __init__(self, api_key: str = '', secret: str = '', testnet: bool = False):
+    def __init__(self, api_key: str = '', secret: str = '', use_realtime: bool = True):
         """
         Initialize Binance fetcher
         
         Args:
             api_key: Binance API key (optional for public data)
             secret: Binance API secret (optional for public data)
-            testnet: Use testnet instead of production
+            use_realtime: If True, always use REALTIME (production) for market data
+                         If False, use testnet (demo mode)
         """
         self.api_key = api_key
         self.secret = secret
-        self.testnet = testnet
+        self.use_realtime = use_realtime
         self.exchange: Optional[ccxt.binance] = None
         
         # Data storage per symbol_timeframe key
         self.dataframes: Dict[str, pd.DataFrame] = {}
     
     async def initialize(self):
-        """Initialize exchange connection"""
+        """Initialize exchange connection for market data"""
         config = {
             'enableRateLimit': True,
             'rateLimit': 50,  # 50ms between requests
@@ -44,18 +45,20 @@ class BinanceFetcher:
             config['apiKey'] = self.api_key
             config['secret'] = self.secret
         
-        self.exchange = ccxt.binance(config) #TODO
-                # Enable testnet/sandbox mode if requested
-        self.exchange.enable_demo_trading(True)
-        if self.testnet:
+        self.exchange = ccxt.binance(config)
+        
+        # Market data: ALWAYS use realtime (production) unless explicitly disabled
+        if not self.use_realtime:
+            # Only enable demo/testnet if explicitly requested
             self.exchange.enable_demo_trading(True)
-            logger.info("🧪 Testnet mode enabled for data fetcher")
+            logger.info("🧪 Data Fetcher: TESTNET mode (demo market data)")
+        else:
+            logger.info("📊 Data Fetcher: REALTIME mode (production market data)")
         
         # Load markets first
-        await self.exchange.load_markets()
+        # await self.exchange.load_markets()
         
-
-        logger.info(f"Binance Futures exchange initialized (testnet={self.testnet})")
+        logger.info(f"✓ Binance Futures data fetcher initialized (realtime={self.use_realtime})")
     
     async def close(self):
         """Close exchange connection"""
@@ -169,7 +172,8 @@ class BinanceFetcher:
             if len(df) > limit:
                 df = df.tail(limit)
             
-            logger.info(f"Fetched {len(df)} CLOSED bars for {symbol} {timeframe} (excluded open candle)")
+            mode = "REALTIME" if self.use_realtime else "TESTNET"
+            logger.debug(f"[{mode}] Fetched {len(df)} CLOSED bars for {symbol} {timeframe}")
             return df
         
         except Exception as e:

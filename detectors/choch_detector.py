@@ -253,8 +253,9 @@ class ChochDetector:
         Insert fake pivot if two consecutive pivots are same type
         Returns True if pivot was inserted
         
-        IMPORTANT: Only insert ONE fake pivot per gap, even if gap has multiple extremes.
-        This prevents fake pivot explosion when reconstructing from limited bars.
+        MATCHING Pine Script logic (lines 283-304):
+        - Scan ENTIRE gap (no size limit) to find best extreme
+        - Insert fake pivot at the extreme point
         """
         if last_high != new_high:
             return False
@@ -276,34 +277,32 @@ class ChochDetector:
         if gap <= 0:
             return False
         
-        # Only insert if gap is small (1-3 bars)
-        # This prevents fake pivot explosion in limited dataframes
-        # When gap > 3, we skip fake pivot to keep count reasonable
-        if gap > 3:
-            return False
-        
-        # Find extreme in gap using integer positions
+        # Pine Script: scan ENTIRE gap (no limit) to find best extreme
         first_bar_in_gap = last_bar_pos + 1
         last_bar_in_gap = new_bar_pos - 1
         
-        # Map to dataframe indices
+        # Map to dataframe indices and scan for extreme
         try:
             gap_df = df.iloc[first_bar_in_gap:last_bar_in_gap + 1]
             
             if len(gap_df) == 0:
                 return False
             
-            if new_high:
-                # Looking for low (opposite of the consecutive high)
-                insert_idx = gap_df['low'].idxmin()
-                insert_price = gap_df.loc[insert_idx, 'low']
-            else:
-                # Looking for high (opposite of the consecutive low)
-                insert_idx = gap_df['high'].idxmax()
-                insert_price = gap_df.loc[insert_idx, 'high']
+            # Initialize with first bar in gap (matching Pine Script)
+            insert_price = gap_df.iloc[0]['low'] if new_high else gap_df.iloc[0]['high']
+            insert_idx = gap_df.index[0]
+            insert_high = not new_high
+            
+            # Scan entire gap to find best extreme (matching Pine Script for loop)
+            for idx in gap_df.index:
+                candidate = gap_df.loc[idx, 'low'] if new_high else gap_df.loc[idx, 'high']
+                
+                # Update if found better extreme
+                if (new_high and candidate < insert_price) or (not new_high and candidate > insert_price):
+                    insert_price = candidate
+                    insert_idx = idx
             
             insert_bar = insert_idx
-            insert_high = not new_high
             
             # Validate: fake pivot must be between last and new pivot
             if insert_bar > last_bar and insert_bar < new_bar:

@@ -7,15 +7,24 @@ from dotenv import load_dotenv
 # Load .env file if exists
 load_dotenv()
 
-# Binance Configuration
+# Binance Configuration - Realtime Data (for market analysis)
 BINANCE_API_KEY = os.getenv('BINANCE_API_KEY', '')
 BINANCE_SECRET = os.getenv('BINANCE_SECRET', '')
+
+# Binance Configuration - Demo/Live Trading (for order execution)
+# If not set, will fallback to BINANCE_API_KEY/BINANCE_SECRET
+BINANCE_API_KEY_DEMO = os.getenv('BINANCE_API_KEY_DEMO', os.getenv('BINANCE_API_KEY', ''))
+BINANCE_SECRET_DEMO = os.getenv('BINANCE_SECRET_DEMO', os.getenv('BINANCE_SECRET', ''))
 
 # Trading Bot Configuration
 ENABLE_TRADING = bool(int(os.getenv('ENABLE_TRADING', '0')))  # 0 = disabled (simulation), 1 = enabled (real trading)
 DEMO_TRADING = bool(int(os.getenv('DEMO_TRADING', '1')))  # 1 = use testnet (default), 0 = live trading
 POSITION_SIZE = float(os.getenv('POSITION_SIZE', '100.0'))  # Position size in USDT
 LEVERAGE = int(os.getenv('LEVERAGE', '20'))  # Leverage multiplier
+
+# Data Fetcher Configuration
+USE_REALTIME_DATA = bool(int(os.getenv('USE_REALTIME_DATA', '1')))  # 1 = use production market data (default), 0 = use testnet data
+# NOTE: Even in demo trading mode, we typically want real market data for accurate signals
 
 # Telegram Configuration
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '8452540404:AAHbUhJEHUa0GPvexznJBYdTP3qyIBZeBAU')
