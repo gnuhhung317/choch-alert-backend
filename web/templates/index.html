@@ -25,9 +25,9 @@
         }
         
         .dashboard-container {
-            max-width: 100%;
+            max-width: 1400px;
             margin: 0 auto;
-            padding: 0 10px;
+            padding: 0 15px;
         }
         
         .header {
@@ -75,6 +75,14 @@
             padding: 15px;
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
             overflow-x: auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .table-responsive {
+            width: fit-content;
+            max-width: 100%;
         }
         
         .table-header {
@@ -82,6 +90,7 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 10px;
+            width: 100%;
         }
         
         .table-header h2 {
@@ -101,9 +110,10 @@
         }
         
         .alerts-table {
-            width: 100%;
+            width: auto;
             border-collapse: collapse;
             font-size: 12px;
+            table-layout: auto;
         }
         
         .alerts-table thead {
@@ -111,19 +121,19 @@
         }
         
         .alerts-table th {
-            padding: 8px 5px;
+            padding: 6px 4px;
             text-align: left;
             font-weight: 600;
             color: #555;
             border-bottom: 2px solid #dee2e6;
-            font-size: 11px;
+            font-size: 10px;
             white-space: nowrap;
         }
         
         .alerts-table td {
-            padding: 8px 5px;
+            padding: 6px 4px;
             border-bottom: 1px solid #dee2e6;
-            font-size: 11px;
+            font-size: 10px;
         }
         
         .alerts-table tbody tr:hover {
@@ -133,38 +143,41 @@
         .direction-long {
             background: #10b981;
             color: white;
-            padding: 3px 6px;
-            border-radius: 4px;
+            padding: 2px 5px;
+            border-radius: 3px;
             font-weight: 600;
-            font-size: 10px;
+            font-size: 9px;
             white-space: nowrap;
+            display: inline-block;
         }
         
         .direction-short {
             background: #ef4444;
             color: white;
-            padding: 3px 6px;
-            border-radius: 4px;
+            padding: 2px 5px;
+            border-radius: 3px;
             font-weight: 600;
-            font-size: 10px;
+            font-size: 9px;
             white-space: nowrap;
+            display: inline-block;
         }
         
         .timeframe-badge {
             background: #6366f1;
             color: white;
-            padding: 3px 6px;
-            border-radius: 4px;
+            padding: 2px 5px;
+            border-radius: 3px;
             font-weight: 600;
-            font-size: 10px;
+            font-size: 9px;
             white-space: nowrap;
+            display: inline-block;
         }
         
         .tradingview-link {
             color: #667eea;
             text-decoration: none;
             font-weight: 600;
-            font-size: 14px;
+            font-size: 13px;
             display: inline-block;
         }
         
@@ -173,7 +186,7 @@
         }
         
         .tradingview-link i {
-            font-size: inherit;
+            font-size: 12px;
         }
         
         .no-alerts {
@@ -368,6 +381,7 @@
             border-top: 2px solid #e2e8f0;
             flex-wrap: wrap;
             gap: 10px;
+            width: 100%;
         }
         
         .pagination-info {
@@ -436,44 +450,47 @@
                 padding: 12px;
             }
             
+            .table-responsive {
+                width: 100%;
+            }
+            
+            .alerts-table {
+                width: 100%;
+            }
+            
             .table-header h2 {
                 font-size: 1.05rem;
             }
             
             .alerts-table th,
             .alerts-table td {
-                padding: 6px 4px;
-                font-size: 11px;
+                padding: 5px 3px;
+                font-size: 10px;
             }
             
-            /* Hide icons in table headers and some cells on mobile, but NOT links */
-            .alerts-table th i {
-                display: none;
-            }
-            
-            .alerts-table td small i,
-            .alerts-table td strong i {
-                display: none;
-            }
-            
-            /* Keep link icons visible */
-            .tradingview-link i {
-                display: inline-block !important;
+            /* Make table more compact on mobile */
+            .alerts-table th:first-child,
+            .alerts-table td:first-child {
+                width: 80px;
             }
             
             .direction-long,
             .direction-short {
-                font-size: 11px;
-                padding: 4px 7px;
+                font-size: 8px;
+                padding: 2px 4px;
             }
             
             .timeframe-badge {
-                font-size: 11px;
-                padding: 4px 7px;
+                font-size: 8px;
+                padding: 2px 4px;
             }
             
             .tradingview-link {
-                font-size: 16px;
+                font-size: 15px;
+            }
+            
+            .tradingview-link i {
+                font-size: 14px;
             }
             
             .pagination-container {
@@ -639,13 +656,13 @@
                 <table class="alerts-table">
                     <thead>
                         <tr>
-                            <th>Thời gian<br><small>(GMT+7)</small></th>
-                            <th>Mã</th>
-                            <th>Khung</th>
-                            <th>Hướng</th>
-                            <th>Nhóm</th>
-                            <th>Giá</th>
-                            <th>Link</th>
+                            <th style="width: 85px;">Thời gian</th>
+                            <th style="width: 80px;">Mã</th>
+                            <th style="width: 45px;">Khung</th>
+                            <th style="width: 50px;">Hướng</th>
+                            <th style="width: 45px;">Nhóm</th>
+                            <th style="width: 75px;">Giá</th>
+                            <th style="width: 35px;">Link</th>
                         </tr>
                     </thead>
                     <tbody id="alertsTableBody">

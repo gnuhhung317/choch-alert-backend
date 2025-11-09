@@ -67,7 +67,7 @@ class BinanceFetcher:
             logger.info("Binance exchange connection closed")
     
     async def get_all_usdt_pairs(self, min_volume_24h: float = 1000000, quote: str = 'USDT', 
-                               max_pairs: int = 100) -> List[str]:
+                               max_pairs: int = 100, exclude_symbols: List[str] = None) -> List[str]:
         """
         Get all FUTURES trading pairs with specified quote currency and minimum volume
         Always includes BTC, ETH, BNB as fixed coins + random selection of others
@@ -76,6 +76,7 @@ class BinanceFetcher:
             min_volume_24h: Minimum 24h volume in quote currency
             quote: Quote currency (e.g., 'USDT', 'BUSD')
             max_pairs: Maximum number of pairs to return (0 = unlimited)
+            exclude_symbols: List of symbols to exclude from monitoring
         
         Returns:
             List of FUTURES symbol strings (e.g., ['BTCUSDT', 'ETHUSDT'])
@@ -85,6 +86,11 @@ class BinanceFetcher:
         
         # Fixed coins to always monitor
         FIXED_COINS = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT']
+        
+        # Normalize exclude list
+        if exclude_symbols is None:
+            exclude_symbols = []
+        exclude_symbols = [s.strip().upper() for s in exclude_symbols if s.strip()]
         
         try:
             # Fetch all tickers
@@ -106,7 +112,8 @@ class BinanceFetcher:
                         if volume_24h and volume_24h >= min_volume_24h:
                             # Return in format BTCUSDT (without slash)
                             clean_symbol = base_quote.replace('/', '')
-                            if clean_symbol not in valid_pairs:  # Skip duplicates
+                            # Skip if in exclude list or already added
+                            if clean_symbol not in exclude_symbols and clean_symbol not in valid_pairs:
                                 valid_pairs.append(clean_symbol)
                 # Skip spot symbols (without colon) to ensure futures only
             
@@ -119,11 +126,14 @@ class BinanceFetcher:
             if max_pairs == 0:
                 # Return ALL pairs (fixed + all others) - unlimited mode
                 final_pairs = valid_pairs[:fixed_count] + others
-                logger.info(f"Selected ALL {len(final_pairs)} FUTURES pairs: {fixed_count} fixed + {len(others)} others (UNLIMITED mode)")
+                logger.info(f"Selected ALL {len(final_pairs)} FUTURES pairs: {fixed_count} fixed + {len(others)} others (UNLIMITED mode, excluded {len(exclude_symbols)} symbols)")
             else:
                 # Take fixed + random up to max_pairs total
                 final_pairs = valid_pairs[:fixed_count] + others[:max_pairs-fixed_count]
-                logger.info(f"Selected {len(final_pairs)} FUTURES pairs: {fixed_count} fixed + {len(final_pairs)-fixed_count} others (LIMITED to {max_pairs})")
+                logger.info(f"Selected {len(final_pairs)} FUTURES pairs: {fixed_count} fixed + {len(final_pairs)-fixed_count} others (LIMITED to {max_pairs}, excluded {len(exclude_symbols)} symbols)")
+            
+            if exclude_symbols:
+                logger.info(f"Excluded symbols: {', '.join(exclude_symbols)}")
             
             return final_pairs
         

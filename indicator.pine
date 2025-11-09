@@ -494,6 +494,19 @@ if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
             matchedGroup := "G3"
         else
             matchedGroup := na
+    
+    // ========== P8 CANDLE BODY RESTRICTIONS ==========
+    // Get P8 candle OHLC
+    [b8,p8,h8] = getPivotFromEnd(0)
+    off8 = math.max(0, bar_index - b8)
+    open8 = open[off8]
+    close8 = close[off8]
+    high8 = high[off8]
+    low8 = low[off8]
+    
+    // P8 body: min/max of open and close
+    p8_body_high = math.max(open8, close8)
+    p8_body_low = math.min(open8, close8)
 
     // Get volumes at pivot bars
     vol8 = getVolumeFromEnd(0)
@@ -523,6 +536,12 @@ if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
         // Downtrend → CHoCH Up
         priceCondition = false
         volumeCondition = false
+        p8Restriction = false
+
+        // Downtrend → CHoCH Up: Confirmation candle restrictions
+        // 1. Close phải trên HIGH của pivot 8 (close > high8)
+        // 2. Low không được chạm body của nến pivot 8 (low > p8_body_high)
+        p8Restriction := (close > high8) and (low > p8_body_high)
 
         if matchedGroup == "G1"
             // G1: Close_CF <= HIGH_5
@@ -538,7 +557,7 @@ if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
             vol_456_ok = (vol4 == max_456) or (vol6 == max_456)
 
             volumeCondition := vol_678_ok and vol_456_ok
-            confirmUp := priceCondition and volumeCondition
+            confirmUp := priceCondition and volumeCondition and p8Restriction
             
         else if matchedGroup == "G2"
             // G2: Close_CF <= HIGH_7
@@ -548,7 +567,7 @@ if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
             // (Vol4 OR Vol8 OR Vol_CHoCH) là lớn nhất cụm 45678
             max_45678 = math.max(vol4, math.max(vol5, math.max(vol6, math.max(vol7, vol8))))
             volumeCondition := (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch >= max_45678)
-            confirmUp := priceCondition and volumeCondition
+            confirmUp := priceCondition and volumeCondition and p8Restriction
             
         else if matchedGroup == "G3"
             // G3: Close_CF <= HIGH_5
@@ -558,7 +577,7 @@ if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
             // (Vol4 OR Vol8 OR Vol_CHoCH) là lớn nhất cụm 45678
             max_45678 = math.max(vol4, math.max(vol5, math.max(vol6, math.max(vol7, vol8))))
             volumeCondition := (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch >= max_45678)
-            confirmUp := priceCondition and volumeCondition
+            confirmUp := priceCondition and volumeCondition and p8Restriction
 
         // Additional groups for Up confirmation (Downtrend -> CHoCH Up): G4', G5', G6'
         // Groups G4/G5/G6 removed - no additional group-specific Up rules
@@ -567,6 +586,12 @@ if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
         // Uptrend → CHoCH Down
         priceCondition = false
         volumeCondition = false
+        p8Restriction = false
+        
+        // Uptrend → CHoCH Down: Confirmation candle restrictions
+        // 1. Close phải dưới LOW của pivot 8 (close < low8)
+        // 2. High không được chạm body của nến pivot 8 (high < p8_body_low)
+        p8Restriction := (close < low8) and (high < p8_body_low)
         
         if matchedGroup == "G1"
             // G1: Close_CF >= LOW_5
@@ -582,7 +607,7 @@ if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
             vol_456_ok = (vol4 == max_456) or (vol6 == max_456)
             
             volumeCondition := vol_678_ok and vol_456_ok
-            confirmDown := priceCondition and volumeCondition
+            confirmDown := priceCondition and volumeCondition and p8Restriction
             
         else if matchedGroup == "G2"
             // G2: Close_CF >= LOW_7
@@ -592,7 +617,7 @@ if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
             // (Vol4 OR Vol8 OR Vol_CHoCH) là lớn nhất cụm 45678
             max_45678 = math.max(vol4, math.max(vol5, math.max(vol6, math.max(vol7, vol8))))
             volumeCondition := (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch >= max_45678)
-            confirmDown := priceCondition and volumeCondition
+            confirmDown := priceCondition and volumeCondition and p8Restriction
             
         else if matchedGroup == "G3"
             // G3: Close_CF >= LOW_5
@@ -602,7 +627,7 @@ if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
             // (Vol4 OR Vol8 OR Vol_CHoCH) là lớn nhất cụm 45678
             max_45678 = math.max(vol4, math.max(vol5, math.max(vol6, math.max(vol7, vol8))))
             volumeCondition := (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch >= max_45678)
-            confirmDown := priceCondition and volumeCondition
+            confirmDown := priceCondition and volumeCondition and p8Restriction
  
         // New groups for Down confirmation (Uptrend -> CHoCH Down)
         // Groups G4/G5/G6 removed - no additional group-specific Down rules

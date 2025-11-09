@@ -329,7 +329,8 @@ class ChochAlertSystem:
             symbols_list = await self.fetcher.get_all_usdt_pairs(
                 min_volume_24h=config.MIN_VOLUME_24H,
                 quote=config.QUOTE_CURRENCY,
-                max_pairs=config.MAX_PAIRS
+                max_pairs=config.MAX_PAIRS,
+                exclude_symbols=config.EXCLUDE_SYMBOLS
             )
             mode_text = "UNLIMITED" if config.MAX_PAIRS == 0 else f"LIMITED to {config.MAX_PAIRS}"
             logger.info(f"Found {len(symbols_list)} futures to plot ({mode_text})")
@@ -592,7 +593,8 @@ class ChochAlertSystem:
                     selected_symbols = await self.fetcher.get_all_usdt_pairs(
                         min_volume_24h=config.MIN_VOLUME_24H,
                         quote=config.QUOTE_CURRENCY,
-                        max_pairs=config.MAX_PAIRS
+                        max_pairs=config.MAX_PAIRS,
+                        exclude_symbols=config.EXCLUDE_SYMBOLS
                     )
                     mode_text = "UNLIMITED" if config.MAX_PAIRS == 0 else f"max_pairs={config.MAX_PAIRS}"
                     logger.info(f"[Loop #{loop_count}] Using {len(selected_symbols)} symbols ({mode_text})")

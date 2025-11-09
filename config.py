@@ -40,6 +40,7 @@ FETCH_ALL_COINS = os.getenv('FETCH_ALL_COINS', '1') == '1'  # Set to 1 to fetch 
 MIN_VOLUME_24H = float(os.getenv('MIN_VOLUME_24H', '10000'))  # Minimum 24h volume in USDT
 MAX_PAIRS = int(os.getenv('MAX_PAIRS', '0'))  # Maximum number of pairs to monitor (0 = unlimited)
 QUOTE_CURRENCY = os.getenv('QUOTE_CURRENCY', 'USDT')  # Filter by quote currency
+EXCLUDE_SYMBOLS = os.getenv('EXCLUDE_SYMBOLS', 'BTCDOMUSDT').split(',')  # Comma-separated list of symbols to exclude
 
 # Pivot Configuration
 PIVOT_LEFT = int(os.getenv('PIVOT_LEFT', '1'))

@@ -58,9 +58,9 @@ class TimeframeAdapter:
         await self.fetcher.close()
     
     async def get_all_usdt_pairs(self, min_volume_24h: float = 100000, quote: str = 'USDT', 
-                                max_pairs: int = 100) -> list:
+                                max_pairs: int = 100, exclude_symbols: list = None) -> list:
         """Get all trading pairs - passthrough method"""
-        return await self.fetcher.get_all_usdt_pairs(min_volume_24h, quote, max_pairs)
+        return await self.fetcher.get_all_usdt_pairs(min_volume_24h, quote, max_pairs, exclude_symbols)
     
     async def fetch_historical(self, symbol: str, timeframe: str, limit: int = 500) -> pd.DataFrame:
         """
