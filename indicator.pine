@@ -65,6 +65,14 @@ getVolumeFromEnd(idxFromEnd) =>
 // Dung sai tick
 tol = syminfo.mintick * touchTicks
 
+// --- Pivot8 OHLC/body placeholders (declared so we can assign with := later)
+var float open8 = na
+var float close8_p8 = na
+var float high8_p8 = na
+var float low8_p8 = na
+var float body_top8 = na
+var float body_bot8 = na
+
 // ========== Helpers cho phân loại biến thể ==========
 getHLTripletAroundMid() =>
     // Timeline: [LEFT/h3] → [CENTER/h2/PIVOT] → [RIGHT/h1]
@@ -498,13 +506,22 @@ if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
     vol_choch = volume[1]  // Volume of CHoCH candle (previous bar)
 
     // --- Extra: retrieve pivot8 bar OHLC to enforce body / extreme constraints on confirmation candle
-    off8 = math.max(0, bar_index - b8)
-    open8 = open[off8]
-    close8_p8 = close[off8]
-    high8_p8 = high[off8]
-    low8_p8 = low[off8]
-    body_top8 = math.max(open8, close8_p8)
-    body_bot8 = math.min(open8, close8_p8)
+    // Use lastEightBarIdx (set earlier) instead of local b8 which may be out of scope
+    if not na(lastEightBarIdx)
+        off8 = math.max(0, bar_index - lastEightBarIdx)
+        open8 := open[off8]
+        close8_p8 := close[off8]
+        high8_p8 := high[off8]
+        low8_p8 := low[off8]
+        body_top8 := math.max(open8, close8_p8)
+        body_bot8 := math.min(open8, close8_p8)
+    else
+        open8 := na
+        close8_p8 := na
+        high8_p8 := na
+        low8_p8 := na
+        body_top8 := na
+        body_bot8 := na
 
     // Apply pattern group conditions with volume
     confirmUp = false
