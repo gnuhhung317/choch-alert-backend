@@ -537,21 +537,6 @@ class ChochDetector:
         except KeyError:
             logger.warning(f"Cannot get volume data for pivots")
             return False, False
-        
-        # ========== P8 CANDLE BODY RESTRICTIONS ==========
-        # Get P8 candle OHLC
-        try:
-            open8 = df.loc[b8, 'open']
-            close8 = df.loc[b8, 'close']
-            high8 = df.loc[b8, 'high']
-            low8 = df.loc[b8, 'low']
-            
-            # P8 body: min/max of open and close
-            p8_body_high = max(open8, close8)
-            p8_body_low = min(open8, close8)
-        except KeyError:
-            logger.warning(f"Cannot get P8 candle data")
-            return False, False
 
         # CHoCH conditions on previous bar (nến CHoCH - ĐÃ ĐÓNG)
         # CHoCH Up: low[prev] > low[pre_prev] AND close[prev] > high[pre_prev] AND close[prev] > pivot6 AND close[prev] < pivot2 AND close[prev] > pivot4
@@ -612,12 +597,6 @@ class ChochDetector:
             # Downtrend → CHoCH Up (base_up đã bao gồm confirm_up_basic)
             price_condition = False
             volume_condition = False
-            p8_restriction = False
-            
-            # Downtrend → CHoCH Up: Confirmation candle restrictions
-            # 1. Close phải trên HIGH của pivot 8 (close > high8)
-            # 2. Low không được chạm body của nến pivot 8 (low > p8_body_high)
-            p8_restriction = (current['close'] > high8) and (current['low'] > p8_body_high)
             
             if state.pattern_group == "G1":
                 # G1: Close_CF <= HIGH_5
@@ -633,7 +612,7 @@ class ChochDetector:
                 vol_456_ok = (vol4 == max_456) or (vol6 == max_456)
                 
                 volume_condition = vol_678_ok and vol_456_ok
-                confirm_up = price_condition and volume_condition and p8_restriction
+                confirm_up = price_condition and volume_condition
                 
             elif state.pattern_group == "G2":
                 # G2: Close_CF <= HIGH_7
@@ -643,7 +622,7 @@ class ChochDetector:
                 # (Vol4 OR Vol8 OR Vol_CHoCH) là lớn nhất cụm 45678
                 max_45678 = max(vol4, vol5, vol6, vol7, vol8)
                 volume_condition = (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch >= max_45678)
-                confirm_up = price_condition and volume_condition and p8_restriction
+                confirm_up = price_condition and volume_condition
                 
             elif state.pattern_group == "G3":
                 # G3: Close_CF <= HIGH_5
@@ -653,18 +632,12 @@ class ChochDetector:
                 # (Vol4 OR Vol8 OR Vol_CHoCH) là lớn nhất cụm 45678
                 max_45678 = max(vol4, vol5, vol6, vol7, vol8)
                 volume_condition = (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch >= max_45678)
-                confirm_up = price_condition and volume_condition and p8_restriction
+                confirm_up = price_condition and volume_condition
         
         if base_down and state.pattern_group:
             # Uptrend → CHoCH Down (base_down đã bao gồm confirm_down_basic)
             price_condition = False
             volume_condition = False
-            p8_restriction = False
-            
-            # Uptrend → CHoCH Down: Confirmation candle restrictions
-            # 1. Close phải dưới LOW của pivot 8 (close < low8)
-            # 2. High không được chạm body của nến pivot 8 (high < p8_body_low)
-            p8_restriction = (current['close'] < low8) and (current['high'] < p8_body_low)
             
             if state.pattern_group == "G1":
                 # G1: Close_CF >= LOW_5
@@ -680,7 +653,7 @@ class ChochDetector:
                 vol_456_ok = (vol4 == max_456) or (vol6 == max_456)
 
                 volume_condition = vol_678_ok and vol_456_ok
-                confirm_down = price_condition and volume_condition and p8_restriction
+                confirm_down = price_condition and volume_condition
                 
             elif state.pattern_group == "G2":
                 # G2: Close_CF >= LOW_7
@@ -690,7 +663,7 @@ class ChochDetector:
                 # (Vol4 OR Vol8 OR Vol_CHoCH) là lớn nhất cụm 45678
                 max_45678 = max(vol4, vol5, vol6, vol7, vol8)
                 volume_condition = (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch >= max_45678)
-                confirm_down = price_condition and volume_condition and p8_restriction
+                confirm_down = price_condition and volume_condition
                 
             elif state.pattern_group == "G3":
                 # G3: Close_CF >= LOW_5
@@ -700,9 +673,45 @@ class ChochDetector:
                 # (Vol4 OR Vol8 OR Vol_CHoCH) là lớn nhất cụm 45678
                 max_45678 = max(vol4, vol5, vol6, vol7, vol8)
                 volume_condition = (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch >= max_45678)
-                confirm_down = price_condition and volume_condition and p8_restriction
+                confirm_down = price_condition and volume_condition
 
         # Fire signal nếu có confirmation và chưa lock
+        # === Extra confirmation constraints based on pivot8 body/extreme ===
+        # No tolerance: use strict comparisons (ignore tol)
+
+        try:
+            open8 = df.loc[b8, 'open']
+            close8_p8 = df.loc[b8, 'close']
+            high8_p8 = df.loc[b8, 'high']
+            low8_p8 = df.loc[b8, 'low']
+            body_top8 = max(open8, close8_p8)
+            body_bot8 = min(open8, close8_p8)
+        except Exception:
+            open8 = close8_p8 = high8_p8 = low8_p8 = None
+            body_top8 = body_bot8 = None
+
+        # When pattern was UPTREND (effective_last_eight_up) and CHoCH is DOWN (base_down),
+        # require: confirmation close must NOT close into low of pivot8 AND
+        # the confirmation high must NOT touch the body of pivot8.
+        if confirm_down and effective_last_eight_up and low8_p8 is not None:
+            extra_ok = True
+            # confirmation close must be above low8 (not close into low8)
+            extra_ok = extra_ok and (current['close'] > low8_p8)
+            # confirmation high must be below pivot8 body bottom (not touch body)
+            extra_ok = extra_ok and (current['high'] < body_bot8)
+            confirm_down = confirm_down and extra_ok
+
+        # When pattern was DOWNTREND (effective_last_eight_down) and CHoCH is UP (base_up),
+        # require: confirmation close must NOT close into high of pivot8 AND
+        # the confirmation low must NOT touch the body of pivot8.
+        if confirm_up and effective_last_eight_down and high8_p8 is not None:
+            extra_ok = True
+            # confirmation close must be below high8 (not close into high8)
+            extra_ok = extra_ok and (current['close'] < high8_p8)
+            # confirmation low must be above pivot8 body top (not touch body)
+            extra_ok = extra_ok and (current['low'] > body_top8)
+            confirm_up = confirm_up and extra_ok
+
         if not state.choch_locked and (confirm_up or confirm_down):
             state.choch_locked = True
             state.choch_bar_idx = prev_idx  # CHoCH occurred at previous bar (ĐÃ ĐÓNG)

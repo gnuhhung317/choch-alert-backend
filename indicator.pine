@@ -146,12 +146,10 @@ allowedByUser(t) =>
         "PH2" => allowPH2
         "PH3" => allowPH3
         "PH4" => allowPH4
-        "PH5" => allowPH5
         "PL1" => allowPL1
         "PL2" => allowPL2
         "PL3" => allowPL3
         "PL4" => allowPL4
-        "PL5" => allowPL5
         => false
 
 // ========== Custom Pivot Detection (không dùng ta.pivot*) ==========
@@ -179,8 +177,6 @@ if bar_index > right + 1 and right - 1 >= 0
         isPH := true
     else if isPH_type4() and allowPH4
         isPH := true
-    else if isPH_type5() and allowPH5
-        isPH := true
     
     // Check Pivot Low variants
     if isPL_type1() and allowPL1
@@ -190,8 +186,6 @@ if bar_index > right + 1 and right - 1 >= 0
     else if isPL_type3() and allowPL3
         isPL := true
     else if isPL_type4() and allowPL4
-        isPL := true
-    else if isPL_type5() and allowPL5
         isPL := true
     
     // Set pivot data if detected
@@ -494,19 +488,6 @@ if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
             matchedGroup := "G3"
         else
             matchedGroup := na
-    
-    // ========== P8 CANDLE BODY RESTRICTIONS ==========
-    // Get P8 candle OHLC
-    [b8,p8,h8] = getPivotFromEnd(0)
-    off8 = math.max(0, bar_index - b8)
-    open8 = open[off8]
-    close8 = close[off8]
-    high8 = high[off8]
-    low8 = low[off8]
-    
-    // P8 body: min/max of open and close
-    p8_body_high = math.max(open8, close8)
-    p8_body_low = math.min(open8, close8)
 
     // Get volumes at pivot bars
     vol8 = getVolumeFromEnd(0)
@@ -515,34 +496,25 @@ if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
     vol5 = getVolumeFromEnd(3)
     vol4 = getVolumeFromEnd(4)
     vol_choch = volume[1]  // Volume of CHoCH candle (previous bar)
-    chochBarIsPivotVol = (bar_index - 1 == lastEightBarIdx)
-    
-    if chochBarIsPivotVol and pCount() >= 9
-        // CHoCH bar is p8 → shift indices by 1
-        vol8 := getVolumeFromEnd(1)  // p9 → p8
-        vol7 := getVolumeFromEnd(2)  // p8 → p7
-        vol6 := getVolumeFromEnd(3)  // p7 → p6
-        vol5 := getVolumeFromEnd(4)  // p6 → p5
-        vol4 := getVolumeFromEnd(5)  // p5 → p4
 
-    
-    // label.new(bar_index, high,   str.tostring(volume[0]),style=label.style_label_down, textcolor=color.white,color=color.new(color.orange, 0), size=size.tiny)
+    // --- Extra: retrieve pivot8 bar OHLC to enforce body / extreme constraints on confirmation candle
+    off8 = math.max(0, bar_index - b8)
+    open8 = open[off8]
+    close8_p8 = close[off8]
+    high8_p8 = high[off8]
+    low8_p8 = low[off8]
+    body_top8 = math.max(open8, close8_p8)
+    body_bot8 = math.min(open8, close8_p8)
 
     // Apply pattern group conditions with volume
     confirmUp = false
     confirmDown = false
-
+    
     if baseUp and not na(matchedGroup)
         // Downtrend → CHoCH Up
         priceCondition = false
         volumeCondition = false
-        p8Restriction = false
-
-        // Downtrend → CHoCH Up: Confirmation candle restrictions
-        // 1. Close phải trên HIGH của pivot 8 (close > high8)
-        // 2. Low không được chạm body của nến pivot 8 (low > p8_body_high)
-        p8Restriction := (close > high8) and (low > p8_body_high)
-
+        
         if matchedGroup == "G1"
             // G1: Close_CF <= HIGH_5
             priceCondition := close <= saved_p5
@@ -550,14 +522,14 @@ if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
             // Volume condition G1: 678_ok AND 456_ok
             // 1. (Vol8 OR Vol6 OR Vol_CHoCH) là lớn nhất cụm 678
             max_678 = math.max(vol6, math.max(vol7, vol8))
-            vol_678_ok = (vol8 == max_678) or (vol6 == max_678) or (vol_choch >= max_678)
+            vol_678_ok = (vol8 == max_678) or (vol6 == max_678) or (vol_choch == max_678)
             
             // 2. (Vol4 OR Vol6) là lớn nhất cụm 456
             max_456 = math.max(vol4, math.max(vol5, vol6))
             vol_456_ok = (vol4 == max_456) or (vol6 == max_456)
-
+            
             volumeCondition := vol_678_ok and vol_456_ok
-            confirmUp := priceCondition and volumeCondition and p8Restriction
+            confirmUp := priceCondition and volumeCondition
             
         else if matchedGroup == "G2"
             // G2: Close_CF <= HIGH_7
@@ -566,8 +538,8 @@ if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
             // Volume condition G2/G3:
             // (Vol4 OR Vol8 OR Vol_CHoCH) là lớn nhất cụm 45678
             max_45678 = math.max(vol4, math.max(vol5, math.max(vol6, math.max(vol7, vol8))))
-            volumeCondition := (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch >= max_45678)
-            confirmUp := priceCondition and volumeCondition and p8Restriction
+            volumeCondition := (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch == max_45678)
+            confirmUp := priceCondition and volumeCondition
             
         else if matchedGroup == "G3"
             // G3: Close_CF <= HIGH_5
@@ -576,8 +548,8 @@ if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
             // Volume condition G2/G3:
             // (Vol4 OR Vol8 OR Vol_CHoCH) là lớn nhất cụm 45678
             max_45678 = math.max(vol4, math.max(vol5, math.max(vol6, math.max(vol7, vol8))))
-            volumeCondition := (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch >= max_45678)
-            confirmUp := priceCondition and volumeCondition and p8Restriction
+            volumeCondition := (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch == max_45678)
+            confirmUp := priceCondition and volumeCondition
 
         // Additional groups for Up confirmation (Downtrend -> CHoCH Up): G4', G5', G6'
         // Groups G4/G5/G6 removed - no additional group-specific Up rules
@@ -586,12 +558,6 @@ if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
         // Uptrend → CHoCH Down
         priceCondition = false
         volumeCondition = false
-        p8Restriction = false
-        
-        // Uptrend → CHoCH Down: Confirmation candle restrictions
-        // 1. Close phải dưới LOW của pivot 8 (close < low8)
-        // 2. High không được chạm body của nến pivot 8 (high < p8_body_low)
-        p8Restriction := (close < low8) and (high < p8_body_low)
         
         if matchedGroup == "G1"
             // G1: Close_CF >= LOW_5
@@ -600,14 +566,14 @@ if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
             // Volume condition G1: 678_ok AND 456_ok
             // 1. (Vol8 OR Vol6 OR Vol_CHoCH) là lớn nhất cụm 678
             max_678 = math.max(vol6, math.max(vol7, vol8))
-            vol_678_ok = (vol8 == max_678) or (vol6 == max_678) or (vol_choch >= max_678)
+            vol_678_ok = (vol8 == max_678) or (vol6 == max_678) or (vol_choch == max_678)
             
             // 2. (Vol4 OR Vol6) là lớn nhất cụm 456
             max_456 = math.max(vol4, math.max(vol5, vol6))
             vol_456_ok = (vol4 == max_456) or (vol6 == max_456)
             
             volumeCondition := vol_678_ok and vol_456_ok
-            confirmDown := priceCondition and volumeCondition and p8Restriction
+            confirmDown := priceCondition and volumeCondition
             
         else if matchedGroup == "G2"
             // G2: Close_CF >= LOW_7
@@ -616,8 +582,8 @@ if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
             // Volume condition G2/G3:
             // (Vol4 OR Vol8 OR Vol_CHoCH) là lớn nhất cụm 45678
             max_45678 = math.max(vol4, math.max(vol5, math.max(vol6, math.max(vol7, vol8))))
-            volumeCondition := (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch >= max_45678)
-            confirmDown := priceCondition and volumeCondition and p8Restriction
+            volumeCondition := (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch == max_45678)
+            confirmDown := priceCondition and volumeCondition
             
         else if matchedGroup == "G3"
             // G3: Close_CF >= LOW_5
@@ -626,11 +592,32 @@ if eightReady and not na(pivot6) and not na(pivot5) and not na(pivot4)
             // Volume condition G2/G3:
             // (Vol4 OR Vol8 OR Vol_CHoCH) là lớn nhất cụm 45678
             max_45678 = math.max(vol4, math.max(vol5, math.max(vol6, math.max(vol7, vol8))))
-            volumeCondition := (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch >= max_45678)
-            confirmDown := priceCondition and volumeCondition and p8Restriction
- 
+            volumeCondition := (vol4 == max_45678) or (vol8 == max_45678) or (vol_choch == max_45678)
+            confirmDown := priceCondition and volumeCondition
+
         // New groups for Down confirmation (Uptrend -> CHoCH Down)
         // Groups G4/G5/G6 removed - no additional group-specific Down rules
+
+    // === Extra confirmation constraints based on pivot8 body/extreme ===
+    // No tolerance: use strict comparisons (ignore tol)
+
+    // When pattern was UPTREND (effectiveLastEightUp) and CHoCH is DOWN (baseDown),
+    // require: confirmation close must NOT close into low of pivot8 AND
+    // the confirmation high must NOT touch the body of pivot8.
+    if confirmDown and effectiveLastEightUp
+        // close must stay above pivot8 low (not close into low8)
+        confirmDown := confirmDown and (close > low8_p8)
+        // confirmation high must be strictly below pivot8 body bottom (not touch body)
+        confirmDown := confirmDown and (high < body_bot8)
+
+    // When pattern was DOWNTREND (effectiveLastEightDown) and CHoCH is UP (baseUp),
+    // require: confirmation close must NOT close into high of pivot8 AND
+    // the confirmation low must NOT touch the body of pivot8.
+    if confirmUp and effectiveLastEightDown
+        // close must stay below pivot8 high (not close into high8)
+        confirmUp := confirmUp and (close < high8_p8)
+        // confirmation low must be strictly above pivot8 body top (not touch body)
+        confirmUp := confirmUp and (low > body_top8)
 
     // Fire signal với locking
     fireChochUp := (not chochLocked) and confirmUp
